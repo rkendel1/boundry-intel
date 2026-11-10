@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import { createFeltDB } from '@feltdb/core';
 
-import { COLLECTIONS, REGISTRY_CONTRACT, RegistryStore, recordKey, registryIdOf } from '../src/index.mjs';
+import { BOUNDRY_INTEL_CONTRACT, COLLECTIONS, RegistryStore, recordKey, registryIdOf } from '../src/index.mjs';
 import { docs, harness, observation, provenance } from './support.mjs';
 
 const REPO = 'repository:github.com/rkendel1/flow_db';
@@ -22,7 +22,7 @@ test('identity: a document is recorded once, under its derived id, with the regi
     // The FeltDB record id is a digest of the registry id (FeltDB ids cannot carry ':' or '/'), and the readable id is unique.
     const raw = await h.db.collection(COLLECTIONS.records).get(recordKey('product:feltdb'));
     assert.equal(raw.registryId, 'product:feltdb');
-    assert.deepEqual(REGISTRY_CONTRACT.collections[COLLECTIONS.records].unique, [['registryId']]);
+    assert.deepEqual(BOUNDRY_INTEL_CONTRACT.collections[COLLECTIONS.records].unique, [['registryId']]);
   } finally {
     await h.close();
   }
