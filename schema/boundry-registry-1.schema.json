@@ -759,6 +759,187 @@
             "to"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "depends-on"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-productVersion"
+                }
+              ]
+            },
+            "to": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-productVersion"
+                }
+              ]
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "runtime",
+                    "build",
+                    "peer",
+                    "optional"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "component-of"
+            },
+            "from": {
+              "$ref": "#/$defs/id-product"
+            },
+            "to": {
+              "$ref": "#/$defs/id-product"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "registered-with"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-repository"
+                }
+              ]
+            },
+            "to": {
+              "$ref": "#/$defs/id-integration"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "verified",
+                    "failed",
+                    "revoked"
+                  ]
+                },
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "github-app",
+                    "publisher-key",
+                    "manifest",
+                    "operator"
+                  ]
+                },
+                "lastVerifiedAt": {
+                  "$ref": "#/$defs/timestamp"
+                },
+                "publisher": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{12}$"
+                }
+              },
+              "required": [
+                "status"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to",
+            "attributes"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -806,7 +987,7 @@
     },
     "id-relationship": {
       "type": "string",
-      "pattern": "^relationship:(?:repository-of|released-from|provides|authorized-for|evidenced-by):[0-9a-f]{16}$"
+      "pattern": "^relationship:(?:repository-of|released-from|provides|authorized-for|evidenced-by|depends-on|component-of|registered-with):[0-9a-f]{16}$"
     },
     "id-event": {
       "type": "string",

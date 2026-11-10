@@ -105,7 +105,35 @@ test('relationships: endpoint kinds, attributes and the event reference grammar'
   bad('evidenced-by', 'product:feltdb', eventReference('feltdb', 'evt_00000001'), { eventType: 'Released' }, ['registry.event-type.invalid']);
   bad('repository-of', repo, repo, undefined, ['registry.reference.invalid', 'registry.relationship.reflexive']);
   bad('owns', repo, 'product:feltdb', undefined, ['registry.enum.invalid']);
-  assert.deepEqual(Object.keys(RELATIONSHIP_TYPES), ['repository-of', 'released-from', 'provides', 'authorized-for', 'evidenced-by']);
+
+  // Between products: what one needs from another, and what is part of another.
+  ok('depends-on', 'product:feltkit', 'product:appport', { scope: 'runtime' });
+  ok('depends-on', 'product-version:feltkit@0.3.18', 'product-version:appport@1.7.0', { scope: 'runtime' });
+  ok('component-of', 'product:boundry-intel', 'product:boundry');
+  bad('depends-on', 'product:feltkit', 'product:appport', { scope: 'vibes' }, ['registry.enum.invalid']);
+  bad('depends-on', 'product:feltkit', 'repository:github.com/rkendel1/appport', undefined, ['registry.reference.invalid']);
+  bad('depends-on', 'product:feltkit', 'product:feltkit', undefined, ['registry.relationship.reflexive']);
+  bad('component-of', 'product:boundry-intel', 'product:boundry', { scope: 'runtime' }, ['registry.field.unknown']);
+  bad('component-of', 'product-version:feltkit@0.3.18', 'product:boundry', undefined, ['registry.reference.invalid']);
+
+  // Registration: the integration status of a product or repository, and when it was last verified.
+  ok('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', method: 'github-app', lastVerifiedAt: '2026-11-10T04:00:00Z' });
+  ok('registered-with', 'product:feltdb', 'integration:boundry-github-app', { status: 'pending' });
+  ok('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', method: 'publisher-key', publisher: 'a1b2c3d4e5f6' });
+  bad('registered-with', repo, 'integration:boundry-github-app', undefined, ['registry.field.required']);
+  bad('registered-with', repo, 'integration:boundry-github-app', { status: 'who-knows' }, ['registry.enum.invalid']);
+  bad('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', method: 'telepathy' }, ['registry.enum.invalid']);
+  bad('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', publisher: 'not-a-publisher-id' }, ['registry.publisher.invalid']);
+  bad('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', lastVerifiedAt: 'yesterday' }, ['registry.timestamp.invalid']);
+  bad('registered-with', 'capability:collections.query@1', 'integration:boundry-github-app', { status: 'verified' }, ['registry.reference.invalid']);
+  bad('registered-with', repo, 'product:feltdb', { status: 'verified' }, ['registry.reference.invalid']);
+  // A credential is never a registry document, whatever a caller calls the member.
+  assert.deepEqual(
+    codes(validateDocument(docs.relationship('registered-with', repo, 'integration:boundry-github-app', { status: 'verified', publisher: 'a1b2c3d4e5f6' }, { note: 'bik_a1b2c3d4e5f6_0123456789012345678901234567890123456789012' }))),
+    ['registry.field.unknown'],
+  );
+
+  assert.deepEqual(Object.keys(RELATIONSHIP_TYPES), ['repository-of', 'released-from', 'provides', 'authorized-for', 'evidenced-by', 'depends-on', 'component-of', 'registered-with']);
 });
 
 test('provenance: required on every document; references point at an authority and say where', () => {

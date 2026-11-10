@@ -28,6 +28,11 @@ export const KINDS = Object.freeze([...ENTITY_KINDS, RELATIONSHIP_KIND]);
 /**
  * Relationship types and the kinds they may join. `evidenced-by` points from any entity at an ecosystem event by
  * reference (`event:<productId>:<eventId>`); the event itself stays in the event store.
+ *
+ * Both endpoints of every type but `evidenced-by` are FeltDB reference fields in the store, so the authority refuses a
+ * relationship whose endpoint is not recorded and refuses deleting an entity a relationship still names. That is why
+ * a registration is a relationship (`registered-with`) and not a kind of its own: a registration that named a
+ * repository nobody recorded would be a statement about nothing, and its history is the relationship's revisions.
  */
 export const RELATIONSHIP_TYPES = Object.freeze({
   'repository-of': { from: ['repository'], to: ['product'], attributes: ['role'] },
@@ -35,8 +40,28 @@ export const RELATIONSHIP_TYPES = Object.freeze({
   provides: { from: ['product', 'product-version'], to: ['capability'], attributes: ['mechanism'] },
   'authorized-for': { from: ['integration'], to: ['product', 'capability', 'repository'], attributes: ['mode'] },
   'evidenced-by': { from: ENTITY_KINDS, to: ['event'], attributes: ['eventType', 'occurredAt'] },
+  /** What a product needs from another product, at the granularity the asserter knows (product or a single version). */
+  'depends-on': { from: ['product', 'product-version'], to: ['product', 'product-version'], attributes: ['scope'] },
+  /** A product that is part of another product rather than a separate thing people adopt. */
+  'component-of': { from: ['product'], to: ['product'], attributes: [] },
+  /**
+   * A product or repository has registered with an integration (the GitHub App, a publisher key, a manifest): the
+   * integration status and when it was last verified. `publisher` names the publisher identity that speaks for the
+   * subject (`src/publishers.mjs`); the credential itself is never a registry document.
+   */
+  'registered-with': { from: ['product', 'repository'], to: ['integration'], attributes: ['status', 'method', 'lastVerifiedAt', 'publisher'], required: ['status'] },
 });
 export const REPOSITORY_ROLES = Object.freeze(['primary', 'documentation', 'examples', 'mirror']);
+/** `depends-on`: why one product needs another. */
+export const DEPENDENCY_SCOPES = Object.freeze(['runtime', 'build', 'peer', 'optional']);
+/**
+ * `registered-with`: the integration status of a subject. `pending` was asserted but not verified; `verified` was
+ * checked against the integration itself at `lastVerifiedAt`; `failed` was checked and refused; `revoked` was ended.
+ * Nothing here is inferred: a status is only ever what an asserter stated, with its provenance.
+ */
+export const REGISTRATION_STATUSES = Object.freeze(['pending', 'verified', 'failed', 'revoked']);
+/** How a registration was verified. `publisher-key` means a key issued by this registry authenticated the subject. */
+export const VERIFICATION_METHODS = Object.freeze(['github-app', 'publisher-key', 'manifest', 'operator']);
 export const ACCESS_MODES = Object.freeze(['read', 'write', 'read-write']);
 export const PRODUCT_STATUSES = Object.freeze(['planned', 'in-development', 'preview', 'available', 'deprecated', 'retired']);
 export const RELEASE_CHANNELS = Object.freeze(['release', 'prerelease']);
@@ -77,6 +102,8 @@ export const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_.:-]*$/;
 export const PRODUCT_ID = /^[a-z][a-z0-9-]{1,63}$/;
 /** as boundry.event/1 */
 const VERSION = /^[^\s\u0000-\u001f\u007f]+$/;
+/** A publisher id as `src/publishers.mjs` mints it: 12 hexadecimal characters. The secret is never a document member. */
+export const PUBLISHER_ID = /^[0-9a-f]{12}$/;
 /** as boundry.event/1 */
 const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 /** as boundry.event/1 (labels are single-line) */
@@ -332,6 +359,10 @@ const ENTITIES = {
   },
 };
 
+/**
+ * Attribute checks, by attribute name. The name is global across relationship types, so a name means one thing
+ * everywhere: `status` is a registration status (an entity's own `/status` is checked by its kind, not here).
+ */
 const ATTRIBUTE_CHECKS = {
   role: (c, v, p) => c.oneOf(v, p, REPOSITORY_ROLES),
   tag: (c, v, p) => c.version(v, p),
@@ -341,6 +372,11 @@ const ATTRIBUTE_CHECKS = {
   mode: (c, v, p) => c.oneOf(v, p, ACCESS_MODES),
   eventType: (c, v, p) => c.pattern(v, p, EVENT_TYPE, 64, 'registry.event-type.invalid', 'must be a dotted event type such as product.released (the vocabulary is boundry.event/1)'),
   occurredAt: (c, v, p) => c.timestamp(v, p),
+  scope: (c, v, p) => c.oneOf(v, p, DEPENDENCY_SCOPES),
+  status: (c, v, p) => c.oneOf(v, p, REGISTRATION_STATUSES),
+  method: (c, v, p) => c.oneOf(v, p, VERIFICATION_METHODS),
+  lastVerifiedAt: (c, v, p) => c.timestamp(v, p),
+  publisher: (c, v, p) => c.pattern(v, p, PUBLISHER_ID, 32, 'registry.publisher.invalid', 'must be a publisher id issued by this registry'),
 };
 
 function checkRelationship(c, d) {

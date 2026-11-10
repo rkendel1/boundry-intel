@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { createFeltDB } from '@feltdb/core';
 
-import { RegistryStore } from '../src/index.mjs';
+import { EventAcceptor, PublisherDirectory, RegistryStore } from '../src/index.mjs';
 
 /** A persisted FeltDB at `path` (a fresh temp directory unless given) that enforces exactly the registry contract. */
 export async function openDb(path) {
@@ -17,8 +17,29 @@ export async function openDb(path) {
 export async function harness({ path, now } = {}) {
   const { db, path: dir } = await openDb(path);
   const store = new RegistryStore(db, now ? { now } : {});
-  return { db, store, path: dir, close: async ({ keep = false } = {}) => { await db.close(); if (!keep) await rm(dir, { recursive: true, force: true }); } };
+  const publishers = new PublisherDirectory(db, now ? { now } : {});
+  const events = new EventAcceptor(db, publishers, now ? { now } : {});
+  return {
+    db,
+    store,
+    publishers,
+    events,
+    path: dir,
+    close: async ({ keep = false } = {}) => { await db.close(); if (!keep) await rm(dir, { recursive: true, force: true }); },
+  };
 }
+
+/** A valid `boundry.event/1` envelope; override anything. */
+export const envelope = (o = {}) => ({
+  schema: 'boundry.event/1',
+  id: 'evt_00000001',
+  type: 'capability.invoked',
+  occurredAt: '2026-11-09T10:00:00Z',
+  product: { id: 'feltdb', version: '0.21.0' },
+  capability: { name: 'collections.query', version: 1 },
+  outcome: { status: 'succeeded' },
+  ...o,
+});
 
 /** A provenance block: a reference to GitHub by default; override anything. */
 export const provenance = (overrides = {}) => ({

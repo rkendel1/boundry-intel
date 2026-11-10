@@ -2,7 +2,7 @@
   "name": "@boundry/intel-registry",
   "version": "0.1.0",
   "private": true,
-  "description": "Boundry Intel registry: product, product version, repository, capability and integration identities with provenance, stored on FeltDB as attributable references and observations.",
+  "description": "Boundry Intel: product, product version, repository, capability and integration identities with provenance, authenticated publisher identities, and durable acceptance of boundry.event/1 envelopes, stored on FeltDB.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -10,7 +10,11 @@
   "exports": {
     ".": "./src/index.mjs",
     "./contract": "./src/contract.mjs",
-    "./store": "./src/store.mjs"
+    "./store": "./src/store.mjs",
+    "./application": "./src/application.mjs",
+    "./publishers": "./src/publishers.mjs",
+    "./acceptance": "./src/acceptance.mjs",
+    "./events": "./src/events.mjs"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs"
