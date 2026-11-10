@@ -169,6 +169,40 @@ That a subject registered is recorded in the registry as a `registered-with` rel
 (`status`: `pending` `verified` `failed` `revoked`), not as a document kind, so FeltDB refuses a dangling registration
 and `registry_revisions` supplies the status history. The credential stays out of the registry entirely.
 
+### The AppPort feedback bridge
+
+[`src/appport-feedback.mjs`](src/appport-feedback.mjs). AppPort Services stays authoritative for feedback records and
+their lifecycle; this maps an `appport.feedback/1` lifecycle change to a `boundry.event/1` envelope, so a provider can
+forward **evidence that a change happened** without this system recreating its records.
+
+```js
+import { createFeedbackForwarder } from '@appport/sdk';
+import { feedbackMapping } from '@boundry/intel-registry';
+
+const forwarder = createFeedbackForwarder({ map: feedbackMapping({ id: 'appport-services', version: '0.16.0' }), transport });
+const feedback = createFeedbackProvider({ /* … */, observe: forwarder.observe });
+```
+
+| | |
+|---|---|
+| A submission | `feedback.submitted` with the feedback id, category, severity and the report's fingerprint |
+| A transition | `feedback.updated` with the id, `from`, `to` and the sequence |
+| A terminal state | a `feedback.updated` like any other: `appport.feedback/1` already says which states are terminal |
+| Identity | `feedback.<feedbackId>.<sequence>`, so a retry or a replay is a `duplicate`, never a second record |
+| Timestamps | the product's own: the receipt's `receivedAt`, the update's `at`. Never the mapping's clock |
+| Provenance | each disclosure relayed with its own status; the principal `verified` because the provider authenticated it, the agent `asserted` because it is the reporter's claim about itself |
+| Not carried | the summary, expected, observed, reproduction steps and evidence. Evidence of a change, never its content |
+
+The mapping lives here rather than in AppPort because the envelope belongs to `boundry.event/1`, which is defined,
+validated and accepted here: every envelope is checked by the real validator and handed to the real acceptor in
+`test/appport-feedback.test.mjs`. AppPort supplies the product-neutral half — an observation seam and a forwarder that
+takes an injected mapping and transport — and so stays independent of the systems built on it. The direction of
+dependency is unchanged: AppPort does not depend on this repository, and this repository already depends on
+`@appport/protocol` for the vocabulary `boundry.event/1` imports.
+
+`acceptorTransport(acceptor, key)` hands envelopes straight to an `EventAcceptor` for a process that holds both, so a
+test or an operator's script needs no network and implies no deployment.
+
 ### The isolation that is enforced
 
 | Boundary | Enforced | How |
