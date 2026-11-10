@@ -14,7 +14,8 @@
     "./application": "./src/application.mjs",
     "./publishers": "./src/publishers.mjs",
     "./acceptance": "./src/acceptance.mjs",
-    "./events": "./src/events.mjs"
+    "./events": "./src/events.mjs",
+    "./appport-feedback": "./src/appport-feedback.mjs"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs"

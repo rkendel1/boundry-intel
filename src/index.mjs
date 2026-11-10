@@ -6,6 +6,8 @@
  *   the explicit relationships between them, each with provenance.
  * - `boundry.event/1` (`events.mjs`): the versioned envelope a product reports, migrated from rkendel1/boundry.
  * - The registry store, the publisher directory and event acceptance, over one FeltDB application contract.
+ * - `appport.feedback/1` lifecycle changes mapped to `boundry.event/1` (`appport-feedback.mjs`), so an AppPort
+ *   provider can forward what happened without this system recreating its feedback records.
  */
 export * from './contract.mjs';
 export { RegistryStore, REGISTRY_COLLECTION_SPEC, COLLECTIONS, recordKey } from './store.mjs';
@@ -20,6 +22,7 @@ export {
   authorizes,
 } from './publishers.mjs';
 export { EventAcceptor, EVENT_COLLECTIONS, EVENT_COLLECTION_SPEC, MAX_BATCH, eventKey } from './acceptance.mjs';
+export { APPPORT_FEEDBACK_EXTENSION, acceptorTransport, feedbackEvent, feedbackEventId, feedbackMapping } from './appport-feedback.mjs';
 export {
   EVENT_SCHEMA,
   SUPPORTED_EVENT_SCHEMAS,
