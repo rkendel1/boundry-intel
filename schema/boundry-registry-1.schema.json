@@ -1,0 +1,816 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://boundry.company/schemas/boundry-registry-1.schema.json",
+  "title": "Boundry Intel registry document (boundry.registry/1)",
+  "description": "A closed, versioned statement about one thing in the Boundry ecosystem (a product, product version, GitHub repository, capability or integration identity) or one explicit relationship between two of them, with provenance: where it came from, who asserted it, when, and whether it is a reference to an authority or Boundry's own observation. The registry never stores the authority's data. Cross-field rules the schema cannot express (derived ids, relationship endpoint kinds, the credential floor, the future bound on observedAt) are the reference validator's (src/contract.mjs).",
+  "$ref": "#/$defs/document",
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "productId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$"
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^https://[^\\s\\u0000-\\u001f\\u007f]+$"
+    },
+    "repositorySegment": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"
+    },
+    "capabilityName": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+    },
+    "asserter": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "operator",
+            "integration",
+            "product",
+            "job"
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "description": "A reference points at an authority (github, npm, product-repository, product-manifest) and must say where; an observation is Boundry's own record and may name any source. recordedAt is set by the registry, never by the asserter.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "reference"
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "system": {
+                  "enum": [
+                    "github",
+                    "npm",
+                    "product-repository",
+                    "product-manifest"
+                  ]
+                },
+                "locator": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+                }
+              },
+              "required": [
+                "system",
+                "locator"
+              ],
+              "additionalProperties": false
+            },
+            "assertedBy": {
+              "$ref": "#/$defs/asserter"
+            },
+            "observedAt": {
+              "$ref": "#/$defs/timestamp"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "assertedBy",
+            "observedAt"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "observation"
+            },
+            "source": {
+              "type": "object",
+              "properties": {
+                "system": {
+                  "enum": [
+                    "github",
+                    "npm",
+                    "product-repository",
+                    "product-manifest",
+                    "boundry.event",
+                    "operator",
+                    "integration"
+                  ]
+                },
+                "locator": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+                }
+              },
+              "required": [
+                "system"
+              ],
+              "additionalProperties": false
+            },
+            "assertedBy": {
+              "$ref": "#/$defs/asserter"
+            },
+            "observedAt": {
+              "$ref": "#/$defs/timestamp"
+            }
+          },
+          "required": [
+            "kind",
+            "source",
+            "assertedBy",
+            "observedAt"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "product": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.registry/1"
+        },
+        "kind": {
+          "const": "product"
+        },
+        "id": {
+          "$ref": "#/$defs/id-product"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "productId": {
+          "$ref": "#/$defs/productId"
+        },
+        "name": {
+          "$ref": "#/$defs/label"
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        },
+        "category": {
+          "$ref": "#/$defs/label"
+        },
+        "homepage": {
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "status": {
+          "enum": [
+            "planned",
+            "in-development",
+            "preview",
+            "available",
+            "deprecated",
+            "retired"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "provenance",
+        "productId",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "productVersion": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.registry/1"
+        },
+        "kind": {
+          "const": "product-version"
+        },
+        "id": {
+          "$ref": "#/$defs/id-productVersion"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "productId": {
+          "$ref": "#/$defs/productId"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "releasedAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "channel": {
+          "enum": [
+            "release",
+            "prerelease"
+          ]
+        },
+        "packages": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "properties": {
+              "registry": {
+                "enum": [
+                  "npm"
+                ]
+              },
+              "name": {
+                "type": "string",
+                "maxLength": 214,
+                "pattern": "^(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$"
+              },
+              "version": {
+                "$ref": "#/$defs/version"
+              }
+            },
+            "required": [
+              "registry",
+              "name",
+              "version"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "provenance",
+        "productId",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "repository": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.registry/1"
+        },
+        "kind": {
+          "const": "repository"
+        },
+        "id": {
+          "$ref": "#/$defs/id-repository"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "host": {
+          "enum": [
+            "github.com"
+          ]
+        },
+        "owner": {
+          "$ref": "#/$defs/repositorySegment"
+        },
+        "name": {
+          "$ref": "#/$defs/repositorySegment"
+        },
+        "defaultBranch": {
+          "$ref": "#/$defs/label"
+        },
+        "visibility": {
+          "enum": [
+            "public",
+            "private"
+          ]
+        },
+        "archived": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "provenance",
+        "host",
+        "owner",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "capability": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.registry/1"
+        },
+        "kind": {
+          "const": "capability"
+        },
+        "id": {
+          "$ref": "#/$defs/id-capability"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "name": {
+          "$ref": "#/$defs/capabilityName"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "summary": {
+          "$ref": "#/$defs/summary"
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "provenance",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "integration": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.registry/1"
+        },
+        "kind": {
+          "const": "integration"
+        },
+        "id": {
+          "$ref": "#/$defs/id-integration"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "integrationId": {
+          "$ref": "#/$defs/slug"
+        },
+        "name": {
+          "$ref": "#/$defs/label"
+        },
+        "integrationKind": {
+          "enum": [
+            "github-app",
+            "webhook",
+            "service",
+            "agent",
+            "dashboard",
+            "operator",
+            "other"
+          ]
+        },
+        "boundary": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "enum": [
+                "read",
+                "write",
+                "read-write"
+              ]
+            },
+            "scopes": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_.:-]{0,63}$"
+              }
+            },
+            "note": {
+              "$ref": "#/$defs/summary"
+            }
+          },
+          "required": [
+            "mode",
+            "scopes"
+          ],
+          "additionalProperties": false
+        },
+        "principal": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "enum": [
+                "user",
+                "service",
+                "device",
+                "application"
+              ]
+            },
+            "id": {
+              "$ref": "#/$defs/identifier"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "additionalProperties": false
+        },
+        "contact": {
+          "$ref": "#/$defs/label"
+        }
+      },
+      "required": [
+        "schema",
+        "kind",
+        "provenance",
+        "integrationId",
+        "name",
+        "integrationKind",
+        "boundary"
+      ],
+      "additionalProperties": false
+    },
+    "relationship": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "repository-of"
+            },
+            "from": {
+              "$ref": "#/$defs/id-repository"
+            },
+            "to": {
+              "$ref": "#/$defs/id-product"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "role": {
+                  "enum": [
+                    "primary",
+                    "documentation",
+                    "examples",
+                    "mirror"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "released-from"
+            },
+            "from": {
+              "$ref": "#/$defs/id-productVersion"
+            },
+            "to": {
+              "$ref": "#/$defs/id-repository"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "tag": {
+                  "$ref": "#/$defs/version"
+                },
+                "commit": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{7,64}$"
+                },
+                "url": {
+                  "$ref": "#/$defs/httpsUrl"
+                }
+              },
+              "required": [
+                "tag"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to",
+            "attributes"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "provides"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-productVersion"
+                }
+              ]
+            },
+            "to": {
+              "$ref": "#/$defs/id-capability"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "mechanism": {
+                  "enum": [
+                    "appport",
+                    "http",
+                    "sdk",
+                    "mcp",
+                    "cli",
+                    "other"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "authorized-for"
+            },
+            "from": {
+              "$ref": "#/$defs/id-integration"
+            },
+            "to": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-capability"
+                },
+                {
+                  "$ref": "#/$defs/id-repository"
+                }
+              ]
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "enum": [
+                    "read",
+                    "write",
+                    "read-write"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "schema": {
+              "const": "boundry.registry/1"
+            },
+            "kind": {
+              "const": "relationship"
+            },
+            "id": {
+              "$ref": "#/$defs/id-relationship"
+            },
+            "provenance": {
+              "$ref": "#/$defs/provenance"
+            },
+            "type": {
+              "const": "evidenced-by"
+            },
+            "from": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/id-product"
+                },
+                {
+                  "$ref": "#/$defs/id-productVersion"
+                },
+                {
+                  "$ref": "#/$defs/id-repository"
+                },
+                {
+                  "$ref": "#/$defs/id-capability"
+                },
+                {
+                  "$ref": "#/$defs/id-integration"
+                }
+              ]
+            },
+            "to": {
+              "$ref": "#/$defs/id-event"
+            },
+            "attributes": {
+              "type": "object",
+              "properties": {
+                "eventType": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)+$"
+                },
+                "occurredAt": {
+                  "$ref": "#/$defs/timestamp"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema",
+            "kind",
+            "provenance",
+            "type",
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "document": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/product"
+        },
+        {
+          "$ref": "#/$defs/productVersion"
+        },
+        {
+          "$ref": "#/$defs/repository"
+        },
+        {
+          "$ref": "#/$defs/capability"
+        },
+        {
+          "$ref": "#/$defs/integration"
+        },
+        {
+          "$ref": "#/$defs/relationship"
+        }
+      ]
+    },
+    "id-product": {
+      "type": "string",
+      "pattern": "^product:[a-z][a-z0-9-]{1,63}$"
+    },
+    "id-productVersion": {
+      "type": "string",
+      "pattern": "^product-version:[a-z][a-z0-9-]{1,63}@[^\\s\\u0000-\\u001f\\u007f]{1,64}$"
+    },
+    "id-repository": {
+      "type": "string",
+      "pattern": "^repository:github\\.com/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}/[A-Za-z0-9][A-Za-z0-9_.-]{0,99}$"
+    },
+    "id-capability": {
+      "type": "string",
+      "pattern": "^capability:[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*(?:@[1-9][0-9]*)?$"
+    },
+    "id-integration": {
+      "type": "string",
+      "pattern": "^integration:[a-z][a-z0-9-]{1,63}$"
+    },
+    "id-relationship": {
+      "type": "string",
+      "pattern": "^relationship:(?:repository-of|released-from|provides|authorized-for|evidenced-by):[0-9a-f]{16}$"
+    },
+    "id-event": {
+      "type": "string",
+      "pattern": "^event:[a-z][a-z0-9-]{1,63}:[A-Za-z0-9][A-Za-z0-9_.:-]{7,127}$"
+    }
+  }
+}
