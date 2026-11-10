@@ -9,10 +9,13 @@
  * | `registry_records`    | registry id                  | once with `requireAbsent`; revised only under compare-and-set        |
  * | `registry_revisions`  | (registry id, revision)      | once, in the same transaction as the revision that superseded it     |
  *
+ * These two collections are part of the one Boundry Intel application contract (`application.mjs`), beside the
+ * publisher directory's and the event store's.
+ *
  * FeltDB record ids may not contain `:`, `/` or `@` (verified against the local runtime), so a record's FeltDB id is a
  * digest of its registry id (`reg_<hex>`); the readable registry id is a unique, indexed field.
  */
-import { AtomicTransactionError, ConditionalConflictError, defineStateContract, field } from '@feltdb/core';
+import { AtomicTransactionError, ConditionalConflictError, field } from '@feltdb/core';
 import { digestOf } from '@appport/protocol';
 
 import { RELATIONSHIP_KIND, documentDigest, kindOfId, validateDocument } from './contract.mjs';
@@ -23,16 +26,12 @@ const optional = (make) => make({ required: false, nullable: true });
 const required = (make) => make({ required: true });
 
 /**
- * The FeltDB state contract of the registry: every field the store writes, with an equality index for every query it
- * makes. `fromKey` / `toKey` are FeltDB references: the authority refuses a relationship whose endpoint does not exist and
+ * The registry's collections: every field the store writes, with an equality index for every query it makes. `fromKey` / `toKey` are FeltDB references: the authority refuses a relationship whose endpoint does not exist and
  * refuses deleting an entity that a relationship still names. `toKey` is null for an event reference (events live in
  * the event store, not here).
  */
-export const REGISTRY_CONTRACT = Object.freeze({
-  name: 'boundry-intel-registry',
-  version: 1,
-  collections: {
-    [COLLECTIONS.records]: {
+export const REGISTRY_COLLECTION_SPEC = Object.freeze({
+  [COLLECTIONS.records]: {
       fields: {
         registryId: required(field.string),
         schema: required(field.string),
@@ -71,12 +70,9 @@ export const REGISTRY_CONTRACT = Object.freeze({
         supersededAt: required(field.string),
         document: required(field.json),
       },
-      indexes: [{ name: 'revisions_by_registry_id', fields: ['registryId'] }],
-    },
+    indexes: [{ name: 'revisions_by_registry_id', fields: ['registryId'] }],
   },
 });
-
-export const registryStateContract = () => defineStateContract(REGISTRY_CONTRACT);
 
 const PAGE = 1000;
 /** FeltDB id of a registry record: a digest, because FeltDB ids cannot carry the registry id's punctuation. */
@@ -116,7 +112,7 @@ export class RegistryStore {
   #now;
 
   /**
-   * @param {import('@feltdb/core').StateFirstDB} db  a FeltDB on which `registryStateContract()` is active
+   * @param {import('@feltdb/core').StateFirstDB} db  a FeltDB on which `boundryIntelStateContract()` is active
    * @param {{ now?: () => Date }} [options]
    */
   constructor(db, options = {}) {
@@ -124,11 +120,14 @@ export class RegistryStore {
     this.#now = options.now ?? (() => new Date());
   }
 
-  /** Installs the registry contract on a FeltDB that has none yet. Idempotent. Returns whether it was installed now. */
+  /**
+   * Installs the Boundry Intel application contract on a FeltDB that has none yet. Idempotent; returns whether it was
+   * installed now. The registry's collections are part of one application contract with the publisher directory's and
+   * the event store's (`application.mjs`), because FeltDB governs a store with exactly one contract.
+   */
   static async prepare(db) {
-    if (await db.stateContract.active()) return false;
-    await db.stateContract.evolve(registryStateContract());
-    return true;
+    const { prepare } = await import('./application.mjs');
+    return prepare(db);
   }
 
   /* ----------------------------------------------- writes ----------------------------------------------- */

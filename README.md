@@ -2,8 +2,9 @@
 
 The Boundry ecosystem registry: stable identities for products, product versions, GitHub repositories, capabilities
 and integrations, the explicit relationships between them, and the provenance of every statement, stored on FeltDB
-as **attributable references and observations**. It is the foundation future integrations and dashboards read from.
-It is not an ingestion service, a sync job, a deployment or a dashboard (see "Not in scope").
+as **attributable references and observations**; the authenticated publisher identities that may speak to it; and
+durable acceptance of the `boundry.event/1` envelopes those publishers report. It is the foundation future
+integrations and dashboards read from. It is not a deployment, a sync job or a dashboard (see "Not in scope").
 
 `@boundry/intel-registry` 0.1.0 (private). Plain Node ESM, no build step, no LLM anywhere.
 
@@ -16,11 +17,12 @@ These are the rules the registry is built to, and the ones a change must not bre
 | **GitHub remains authoritative for GitHub activity.** | A `repository` record is a *reference* (`provenance.kind: "reference"`, `source.system: "github"`, a locator into GitHub). The registry stores identity and a pointer, never commits, issues or activity. |
 | **Product repositories remain authoritative for their code and releases.** | A `product-version` and its `released-from` relationship carry the tag, commit and release URL as a reference into the repository. No changelog, artifact or code is copied. |
 | **Boundry Intel stores attributable references and observations, not duplicate copies.** | Every record has `provenance`: `kind` (`reference` to an authority or `observation` by Boundry), `source` (system and locator), `assertedBy` (who or what), `observedAt` (the source's time) and `recordedAt` (the registry's clock, set by the store). Documents are closed (unknown members refused) and at most 16 KiB, so there is no room for a copy of anything. |
-| **FeltDB remains the durable state foundation.** | One FeltDB application state contract (`REGISTRY_CONTRACT`), generic primitives only: transactions, `requireAbsent`, `expectedVersion`, a unique constraint, reference fields, equality indexes. No FeltDB code is changed; no second database exists. |
+| **FeltDB remains the durable state foundation.** | One FeltDB application state contract (`BOUNDRY_INTEL_CONTRACT`) over every collection this system owns, generic primitives only: transactions, `requireAbsent`, `expectedVersion`, a unique constraint, reference fields, equality indexes. No FeltDB code is changed; no second database exists. |
 | **Dashboards are projections, never authorities.** | `src/projections.mjs` is read-only and deterministic: the same registry state gives the same projection. A projection carries each record's provenance so a dashboard can show *where a fact came from* and link back to the authority. |
 | **No new control plane or database.** | The store takes a `StateFirstDB` from `@feltdb/core`; tests use `createFeltDB({ mode: "local" })` in a temporary directory. Which FeltDB authority hosts it later is the owner's open question Q1 (see `docs/intelligence-evaluation.md`); nothing here assumes an answer. |
 | **Useful without an LLM.** | Validation, identity, storage and every query are deterministic functions. There is no inference, ranking, summarisation or model call in this package, and its dependencies carry none into the registry path. |
-| **Reuse before invention.** | Product and event id grammars are `boundry.event/1`'s; `provides.mechanism` is `appport.feedback/1`'s integration-mechanism vocabulary; digests and the credential floor are `@appport/protocol`'s; the FeltDB contract pattern is the one `FeltDbFeedbackStore` and the old event store use. |
+| **Acceptance is separate from interpretation.** | An accepted event is stored verbatim beside its digest and the members needed to find it again. No attribution, identity class, confidence or counter is derived on the write path, so an interpretation that changes never requires rewriting an immutable record of what was reported. |
+| **Reuse before invention.** | The event contract, the publisher key format and the acceptance semantics are migrated from `rkendel1/boundry` rather than rewritten; product and event id grammars are `boundry.event/1`'s; `provides.mechanism` is `appport.feedback/1`'s integration-mechanism vocabulary; digests and the credential floor are `@appport/protocol`'s; the FeltDB contract pattern is the one `FeltDbFeedbackStore` and the old event store use. |
 
 ## The contract: `boundry.registry/1`
 
@@ -57,9 +59,12 @@ carries a secret is refused without echoing it.
 | `provides` | `product` or `product-version` → `capability` | `mechanism`: `appport` `http` `sdk` `mcp` `cli` `other` (`appport.feedback/1`) |
 | `authorized-for` | `integration` → `product`, `capability` or `repository` | `mode`: `read` `write` `read-write` |
 | `evidenced-by` | any entity → `event:<productId>:<eventId>` | `eventType` (dotted; vocabulary is `boundry.event/1`'s), `occurredAt` |
+| `depends-on` | `product` or `product-version` → `product` or `product-version` | `scope`: `runtime` `build` `peer` `optional` |
+| `component-of` | `product` → `product` | — |
+| `registered-with` | `product` or `repository` → `integration` | **`status`** (`pending` `verified` `failed` `revoked`), `method` (`github-app` `publisher-key` `manifest` `operator`), `lastVerifiedAt`, `publisher` (12 hex) |
 
-`from` and `to` must be recorded (the store refuses a dangling relationship, and FeltDB refuses deleting an entity a
-relationship still names). An **event reference** `event:<productId>:<eventId>` is the `boundry.event/1` identity
+`RELATIONSHIP_TYPES` is closed: these eight and no others. `from` and `to` must be recorded (the store refuses a
+dangling relationship, and FeltDB refuses deleting an entity a relationship still names). An **event reference** `event:<productId>:<eventId>` is the `boundry.event/1` identity
 `(product.id, id)`; the registry never stores an event, only this pointer and, optionally, its type and time.
 
 ### Provenance
@@ -89,10 +94,10 @@ Provenance is part of the assertion: the same content with different provenance 
 
 ```js
 import { createFeltDB } from '@feltdb/core';
-import { RegistryStore, productProjection } from '@boundry/intel-registry';
+import { prepare, RegistryStore, productProjection } from '@boundry/intel-registry';
 
 const db = createFeltDB({ mode: 'local', namespace: 'boundry-intel-registry', path: './data', access: 'shared' });
-await RegistryStore.prepare(db);                       // installs REGISTRY_CONTRACT once (stateContract.evolve)
+await prepare(db);                                     // installs BOUNDRY_INTEL_CONTRACT once (stateContract.evolve)
 const registry = new RegistryStore(db);
 
 const r = await registry.assert({ schema: 'boundry.registry/1', kind: 'product', productId: 'feltdb', name: 'FeltDB', provenance });
@@ -104,13 +109,73 @@ const r = await registry.assert({ schema: 'boundry.registry/1', kind: 'product',
 | `assert(document)` | once, under the derived id, with `requireAbsent`. `recorded` (committed before returning), `unchanged` (same digest; idempotent), `conflict` (same id, different content; nothing written; `current` returned), `rejected` (invalid or dangling; `issues`). |
 | `revise(document, { expectedDigest })` | compare-and-set replacement. `revised`, `unchanged`, `conflict` (`registry.digest.stale`), `missing`, `rejected`. The superseded document is appended to `registry_revisions` in the same transaction. |
 | `assertAll(documents)` | in order; one result each. |
-| `get(id)` · `list({ kind, productId, relationshipType, fromId, toId })` · `relationships({ from, to, type })` · `history(id)` | reads; sorted by id; bounded. |
+| `get(id)` · `list({ kind, productId, relationshipType, fromId, toId })` · `relationships({ from, to, type })` · `history(id)` | reads; sorted by id; bounded. `history` returns every revision, superseded and current. |
 
 FeltDB collections: `registry_records` (one per registry id; unique on `registryId`; indexes on kind, product,
 relationship type, from, to; `fromKey`/`toKey` are reference fields) and `registry_revisions` (append-only). FeltDB
 record ids are digests of the registry id (`reg_<hex>`) because FeltDB ids cannot carry `:`, `/` or `@`; the readable
 id is the unique field. The digest of a document is RFC 8785 canonical JSON + SHA-256 over the assertion (everything
 but `recordedAt`).
+
+## One application contract
+
+The registry, the publisher directory and the event store are not three FeltDB contracts. FeltDB governs a store with
+exactly one application contract — evolving a second is refused, and writing a collection the active contract does not
+declare is refused too, both verified against the local runtime in `test/integration.test.mjs`. So each module
+declares the fields and indexes of its own collections and `src/application.mjs` composes them into one:
+
+| Collections | Module | Holds |
+|---|---|---|
+| `registry_records`, `registry_revisions` | `store.mjs` | `boundry.registry/1` documents and their history |
+| `intel_publishers` | `publishers.mjs` | publisher identities (the key's hash only, never the key) |
+| `intel_events` | `acceptance.mjs` | accepted `boundry.event/1` envelopes, verbatim |
+
+`prepare(db)` installs it once and answers whether it did. `RegistryStore.prepare`, `PublisherDirectory.prepare` and
+`EventAcceptor.prepare` all delegate to it, so there is one way to install and one source of truth for what the
+authority enforces.
+
+## Publishers and event acceptance
+
+Full contract: [`docs/integration-contracts.md`](docs/integration-contracts.md).
+
+A **publisher** is an authenticated identity bound to exactly one subject — one `product:<id>` or one
+`repository:<host>/<owner>/<name>` — with a closed set of scopes (`events:write`, `registry:assert`,
+`registration:verify`). The key (`bik_<12 hex>_<43 base64url>`) is returned once at issue and stored only as a
+SHA-256 hash, compared in constant time. The subject binding is the isolation boundary and is checked on every call:
+`authorizes(publisher, { scope, subject, productId })` is pure, and authority is never inherited through a registry
+relationship.
+
+```js
+const publishers = new PublisherDirectory(db);
+const { publisher, key } = await publishers.issue({ subject: 'product:feltdb', name: 'FeltDB emitter', scopes: ['events:write'], createdBy: 'operator:randy' });
+
+const events = new EventAcceptor(db, publishers);
+const [answer] = await events.accept(key, [envelope]);
+// answer.status: 'accepted' | 'duplicate' | 'conflict' | 'rejected' | 'unauthorized'
+```
+
+| Answer | Meaning | Retry |
+|---|---|---|
+| `accepted` | validated, authorized and committed before the call returned | no |
+| `duplicate` | that identity is stored with the same canonical digest: an idempotent resend | no |
+| `conflict` | that identity is stored with different content; nothing written | never |
+| `rejected` | invalid under `boundry.event/1`; nothing written; `issues` say what | never |
+| `unauthorized` | unknown or revoked key, missing scope, or another product's event | never |
+
+A refusal writes nothing at all, so being wrong cannot grow the store. Identity is `(product.id, id)` — the same pair
+as the registry's `event:<productId>:<eventId>` reference — so a resend after a storage failure is safe.
+
+That a subject registered is recorded in the registry as a `registered-with` relationship to an `integration`
+(`status`: `pending` `verified` `failed` `revoked`), not as a document kind, so FeltDB refuses a dangling registration
+and `registry_revisions` supplies the status history. The credential stays out of the registry entirely.
+
+### The isolation that is enforced
+
+| Boundary | Enforced | How |
+|---|---|---|
+| Publisher | yes | the key's own subject binding, checked on every accept, never against what an envelope claims |
+| Application / namespace | yes | one contract per store; a foreign contract and an undeclared collection are both refused |
+| Per-tenant partitioning inside one application | **no** | not implemented; separate FeltDB namespaces are the only tenant boundary today |
 
 ## Projections (for dashboards)
 
@@ -126,20 +191,29 @@ npm ci
 npm test        # node --test on a real local FeltDB (temporary directory, enforced contract); no network
 ```
 
-Tests cover identity and idempotency, conflict on re-assertion, revision with history, provenance preservation,
-dangling and reflexive relationships, durability across reopen, the FeltDB contract refusing undeclared fields and
-collections, every projection and journey, validator negatives for every kind, and schema/validator agreement.
+41 tests, all passing, none skipped. They cover identity and idempotency, conflict on re-assertion, revision with
+history, provenance preservation, dangling and reflexive relationships, durability across reopen, the FeltDB contract
+refusing a second contract and an undeclared collection, every projection and journey, validator negatives for every
+kind, schema/validator agreement for both contracts, publisher issue/authenticate/revoke and the refusals around
+them, publisher and namespace isolation, the five acceptance answers with "a refusal writes nothing", batch ordering
+and the batch limit, that acceptance derives nothing, repository and product registration with its verified history,
+and recovery of every collection after closing and reopening the store.
 
 ## Not in scope (deliberately)
 
 | Not here | Why | Depends on |
 |---|---|---|
-| An ingestion or write endpoint | the registry is a library with functions; who may write, and how they authenticate, is the same question the event ingestion has | Q1 (FeltDB authority), Q2 (owner identity) |
+| An HTTP surface | authentication and acceptance are here as functions (`PublisherDirectory`, `EventAcceptor`); routing them needs a deployment | Q1 (FeltDB authority) |
+| Operator authentication | `issue` and `revoke` are operator acts; whoever calls them owns authenticating the operator, exactly as the old implementation's owner token lived in its HTTP layer | Q2 (owner identity) |
 | Deployment, configuration, a Vercel function | no FeltDB authority has been chosen; `server:` mode is unverified | Q1 |
-| Dashboards | projections exist; rendering them is a later PR, and a dashboard is never an authority | this PR |
+| Dashboards | projections exist; rendering them is a later PR, and a dashboard is never an authority | later |
 | A GitHub sync job | would create `repository` and `released-from` references from GitHub; needs an integration identity, a credential home and a schedule | Q1, Q6 |
-| Moving the event store (`intelligence_*` collections) | stays in `rkendel1/boundry` until the ingestion PR; the join to it is fixed here (`evidenced-by`, shared id grammars) | audit §13 step 1 |
+| A product-side event emitter, metrics, rate windows, retention sweeping | each needs a deployment or a schedule; the old implementation's designs stand and are not migrated | Q1 |
+| Reading or interpreting accepted events | acceptance stores; attribution, counting and ranking are a reader's work over the stored bytes | later |
 | Deletion or retraction of records | revision with history covers correction; retraction semantics (and what happens to relationships) are undecided | later |
 
-The evaluation of the old implementation, what was reused, migrated and left behind, and how registry records
-relate to `boundry.event/1` events: [`docs/intelligence-evaluation.md`](docs/intelligence-evaluation.md).
+- [`docs/integration-contracts.md`](docs/integration-contracts.md) — publisher identity and scopes, how GitHub and a
+  product register, the registration lifecycle, the event envelope, the acceptance answers, and the isolation that is
+  actually enforced.
+- [`docs/intelligence-evaluation.md`](docs/intelligence-evaluation.md) — the evaluation of the old implementation:
+  what was reused, migrated and left behind, and how registry records relate to `boundry.event/1` events.

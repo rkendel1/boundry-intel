@@ -1,0 +1,1054 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://boundry.company/schemas/boundry-event-1.schema.json",
+  "title": "Boundry ecosystem event (boundry.event/1)",
+  "description": "An event a Boundry product reports to Boundry Ecosystem Intelligence, the batch that carries it, and the acknowledgement. Provenance reuses appport.feedback/1. Nothing here carries prompts or task content.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/event"
+    },
+    {
+      "$ref": "#/$defs/batch"
+    }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "recordId": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]*$"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[^\\s\\u0000-\\u001f\\u007f]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "actor": {
+      "type": "object",
+      "properties": {
+        "principal": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted",
+                    "verified"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "type": {
+                      "enum": [
+                        "user",
+                        "service",
+                        "device",
+                        "application"
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "type"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "agent": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted",
+                    "verified"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "name": {
+                      "$ref": "#/$defs/label"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "organization": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted",
+                    "verified"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "delegation": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted",
+                    "verified"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "depth": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "anonymous": {
+          "const": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Identity the reporting product can establish: `verified` means the product itself authenticated it. An anonymous caller has no asserted or verified principal, agent or organization."
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "correlationId": {
+          "$ref": "#/$defs/recordId"
+        },
+        "runtime": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "$ref": "#/$defs/label"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "name"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "originatingApplication": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "parentAgent": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted"
+                  ]
+                },
+                "value": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "$ref": "#/$defs/identifier"
+                    },
+                    "name": {
+                      "$ref": "#/$defs/label"
+                    },
+                    "version": {
+                      "$ref": "#/$defs/version"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "id"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "taskCategory": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted"
+                  ]
+                },
+                "value": {
+                  "type": "string",
+                  "maxLength": 64,
+                  "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_]*)*$"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        },
+        "integrationMechanism": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "asserted"
+                  ]
+                },
+                "value": {
+                  "enum": [
+                    "appport",
+                    "http",
+                    "sdk",
+                    "mcp",
+                    "cli",
+                    "other"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "unavailable",
+                    "withheld"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "status"
+              ]
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Exactly the `context` of appport.feedback/1 (spec \u00a75.3): relayed provenance, reporter disclosures only (asserted, unavailable, withheld)."
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.event/1"
+        },
+        "id": {
+          "$ref": "#/$defs/recordId"
+        },
+        "type": {
+          "enum": [
+            "product.discovered",
+            "product.used",
+            "capability.invoked",
+            "task.completed",
+            "task.failed",
+            "feedback.submitted",
+            "feedback.updated",
+            "product.improved",
+            "product.released"
+          ]
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "product": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{1,63}$"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version"
+          ]
+        },
+        "capability": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "outcome": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "succeeded",
+                "failed",
+                "partial",
+                "unknown"
+              ]
+            },
+            "errorCode": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029]*$"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "status"
+          ]
+        },
+        "counters": {
+          "type": "object",
+          "properties": {
+            "operations": {
+              "$ref": "#/$defs/count"
+            },
+            "durationMs": {
+              "$ref": "#/$defs/count"
+            },
+            "items": {
+              "$ref": "#/$defs/count"
+            },
+            "retries": {
+              "$ref": "#/$defs/count"
+            },
+            "bytes": {
+              "$ref": "#/$defs/count"
+            }
+          },
+          "additionalProperties": false
+        },
+        "data": {
+          "type": "object"
+        },
+        "redactions": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "maxLength": 256,
+            "pattern": "^(?:/(?:[^~/]|~[01])*)+$"
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "maxProperties": 8,
+          "propertyNames": {
+            "pattern": "^(?!boundry\\.)[a-z][a-z0-9]*(?:\\.[a-z0-9-]+)+/[1-9][0-9]*$"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "id",
+        "type",
+        "occurredAt",
+        "product"
+      ],
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "product.discovered"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "via": {
+                  "enum": [
+                    "manifest",
+                    "well-known",
+                    "documentation",
+                    "registry",
+                    "package-manager",
+                    "referral",
+                    "other"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "via"
+              ]
+            }
+          },
+          "required": [
+            "data"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "product.used"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "operation": {
+                  "$ref": "#/$defs/label"
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "capability.invoked"
+            }
+          },
+          "required": [
+            "capability",
+            "outcome"
+          ],
+          "not": {
+            "required": [
+              "data"
+            ]
+          }
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "task.completed"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "$ref": "#/$defs/identifier"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outcome": {
+              "properties": {
+                "status": {
+                  "const": "succeeded"
+                }
+              }
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "task.failed"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "$ref": "#/$defs/identifier"
+                }
+              },
+              "additionalProperties": false
+            },
+            "outcome": {
+              "properties": {
+                "status": {
+                  "const": "failed"
+                }
+              }
+            }
+          },
+          "required": [
+            "outcome"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "feedback.submitted"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "feedbackId": {
+                  "$ref": "#/$defs/recordId"
+                },
+                "category": {
+                  "enum": [
+                    "api_friction",
+                    "documentation_ambiguity",
+                    "missing_capability",
+                    "unexpected_behavior",
+                    "sdk_defect",
+                    "performance_issue",
+                    "integration_problem",
+                    "security_concern"
+                  ]
+                },
+                "severity": {
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "critical"
+                  ]
+                },
+                "fingerprint": {
+                  "type": "string",
+                  "pattern": "^sha256:[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "feedbackId",
+                "category",
+                "severity"
+              ]
+            }
+          },
+          "required": [
+            "data"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "feedback.updated"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "feedbackId": {
+                  "$ref": "#/$defs/recordId"
+                },
+                "from": {
+                  "enum": [
+                    "submitted",
+                    "acknowledged",
+                    "investigating",
+                    "reproduced",
+                    "accepted",
+                    "rejected",
+                    "in_progress",
+                    "verified",
+                    "released",
+                    "resolved"
+                  ]
+                },
+                "to": {
+                  "enum": [
+                    "submitted",
+                    "acknowledged",
+                    "investigating",
+                    "reproduced",
+                    "accepted",
+                    "rejected",
+                    "in_progress",
+                    "verified",
+                    "released",
+                    "resolved"
+                  ]
+                },
+                "sequence": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "feedbackId",
+                "from",
+                "to",
+                "sequence"
+              ]
+            }
+          },
+          "required": [
+            "data"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "product.improved"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "change": {
+                  "$ref": "#/$defs/label"
+                },
+                "feedbackIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "items": {
+                    "$ref": "#/$defs/recordId"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "change"
+              ]
+            }
+          },
+          "required": [
+            "data"
+          ]
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "product.released"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "$ref": "#/$defs/version"
+                },
+                "previousVersion": {
+                  "$ref": "#/$defs/version"
+                },
+                "breaking": {
+                  "type": "boolean"
+                },
+                "feedbackIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "items": {
+                    "$ref": "#/$defs/recordId"
+                  }
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "version",
+                "breaking"
+              ]
+            }
+          },
+          "required": [
+            "data"
+          ]
+        }
+      ],
+      "description": "One ecosystem event. Checks JSON Schema cannot express (credential-shaped content, canonical size, future timestamps, anonymous vs identified) are in the reference validator and README \u00a7Contract."
+    },
+    "ack": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "boundry.ingest-ack/1"
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "productId": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "productId"
+          ]
+        },
+        "accepted": {
+          "$ref": "#/$defs/count"
+        },
+        "duplicate": {
+          "$ref": "#/$defs/count"
+        },
+        "conflict": {
+          "$ref": "#/$defs/count"
+        },
+        "rejected": {
+          "$ref": "#/$defs/count"
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "$ref": "#/$defs/count"
+              },
+              "id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "accepted",
+                  "duplicate",
+                  "conflict",
+                  "rejected"
+                ]
+              },
+              "issues": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "pointer": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "code",
+                    "pointer",
+                    "message"
+                  ]
+                }
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "index",
+              "id",
+              "status"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "source",
+        "accepted",
+        "duplicate",
+        "conflict",
+        "rejected",
+        "results"
+      ]
+    },
+    "batch": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/event"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "events"
+      ]
+    }
+  }
+}
