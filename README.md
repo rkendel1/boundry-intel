@@ -215,5 +215,8 @@ and recovery of every collection after closing and reopening the store.
 - [`docs/integration-contracts.md`](docs/integration-contracts.md) — publisher identity and scopes, how GitHub and a
   product register, the registration lifecycle, the event envelope, the acceptance answers, and the isolation that is
   actually enforced.
+- [`docs/agent-feedback/`](docs/agent-feedback/README.md) — feedback from the agents that build and operate the
+  ecosystem, one session per file, as `boundry.event/1` envelopes that a test replays through the real acceptor. An
+  interim representation until there is an acceptor to reach, never a second feedback store.
 - [`docs/intelligence-evaluation.md`](docs/intelligence-evaluation.md) — the evaluation of the old implementation:
   what was reused, migrated and left behind, and how registry records relate to `boundry.event/1` events.
