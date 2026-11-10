@@ -388,3 +388,17 @@ test('a production configuration cannot fall back to a store that does not outli
   assert.equal(JSON.stringify(describeConfig(production)).includes(OPERATOR), false);
   assert.equal(describeConfig(production).operatorBoundary, 'configured');
 });
+
+test('embedded storage in production is an explicit opt-in and must sit on a mounted volume', async () => {
+  const { assertPersistentMount } = await import('../src/config.mjs');
+  const base = { NODE_ENV: 'production', FELTDB_MODE: 'local', FELTDB_PATH: '/data/intel', BOUNDRY_INTEL_OPERATOR_TOKEN: OPERATOR };
+  assert.throws(() => resolveRuntimeConfig(base), /does not outlive this process|cannot start/, 'a local path alone is still refused');
+  assert.throws(() => resolveRuntimeConfig({ ...base, BOUNDRY_INTEL_STORAGE: 'embedded', FELTDB_PATH: 'relative' }), (e) => e.problems.some((x) => /absolute path/.test(x)));
+  const ok = resolveRuntimeConfig({ ...base, BOUNDRY_INTEL_STORAGE: 'embedded' });
+  assert.deepEqual([ok.storage.mode, ok.storage.durable, ok.storage.embedded], ['local', true, true]);
+
+  const root = '26 1 0:21 / / rw - overlay overlay rw\n40 26 8:1 / /data rw - ext4 /dev/vdb rw\n';
+  assert.equal(assertPersistentMount('/data/intel', root), '/data');
+  assert.throws(() => assertPersistentMount('/app/.feltdb', root), /not on a persistent volume/);
+  assert.throws(() => assertPersistentMount('/database/x', root), /not on a persistent volume/, 'a sibling prefix is not the mount');
+});

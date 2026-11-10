@@ -316,7 +316,7 @@ export function startIntelServer(parts) {
   for (const signal of ['SIGTERM', 'SIGINT']) process.once(signal, () => onSignal(signal));
 
   return new Promise((resolve) => {
-    server.listen(config.port, () => {
+    server.listen(config.port, process.env.BOUNDRY_INTEL_HOST || '0.0.0.0', () => {
       log({ event: 'listening', port: server.address().port, ...describeConfig(config), at: new Date().toISOString() });
       resolve({ server, port: server.address().port, close });
     });

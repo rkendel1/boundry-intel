@@ -60,14 +60,22 @@ export function resolveRuntimeConfig(env = process.env) {
     throw new ConfigurationError(`FeltDB configuration is invalid: ${error.message}`, { problems: [String(error.message)] });
   }
 
-  const durable = resolution.mode === DURABLE_MODE;
+  // Embedded storage: a FeltDB inside this process, durable only because its directory is a persistent volume. It is an
+  // explicit opt-in and still never a default; whether the path really is a mounted volume is checked at startup
+  // (`assertPersistentMount`), because the configuration alone cannot know.
+  const embedded = trimmed(env.BOUNDRY_INTEL_STORAGE) === 'embedded';
+  const embeddedPath = trimmed(resolution.path);
+  if (embedded && resolution.mode !== 'local') problems.push(`BOUNDRY_INTEL_STORAGE=embedded needs FELTDB_MODE=local, got "${resolution.mode}".`);
+  if (embedded && resolution.mode === 'local' && !(embeddedPath && embeddedPath.startsWith('/'))) problems.push('BOUNDRY_INTEL_STORAGE=embedded needs FELTDB_PATH set to an absolute path on a persistent volume.');
+  const embeddedOk = embedded && resolution.mode === 'local' && Boolean(embeddedPath?.startsWith('/'));
+  const durable = resolution.mode === DURABLE_MODE || embeddedOk;
   if (production && !durable) {
     problems.push(
       `FeltDB mode is "${resolution.mode}" (resolved from ${resolution.source}), which does not outlive this process. ` +
-        `Production requires mode "${DURABLE_MODE}": set FELTDB_URL and FELTDB_TOKEN (and FELTDB_APPLICATION_ID, FELTDB_NAMESPACE, FELTDB_ENVIRONMENT for a managed authority).`,
+        `Production requires mode "${DURABLE_MODE}": set FELTDB_URL and FELTDB_TOKEN (and FELTDB_APPLICATION_ID, FELTDB_NAMESPACE, FELTDB_ENVIRONMENT for a managed authority), or BOUNDRY_INTEL_STORAGE=embedded with FELTDB_MODE=local and FELTDB_PATH on a persistent volume.`,
     );
   }
-  if (production && durable && !trimmed(resolution.token)) {
+  if (production && durable && !embeddedOk && !trimmed(resolution.token)) {
     problems.push('FELTDB_TOKEN is required in production: a managed authority refuses every data call without a service key.');
   }
 
@@ -103,6 +111,7 @@ export function resolveRuntimeConfig(env = process.env) {
       environment: resolution.environment,
       path: resolution.path,
       durable,
+      embedded: embeddedOk,
       source: resolution.source,
     }),
     port,
@@ -118,7 +127,31 @@ export function resolveRuntimeConfig(env = process.env) {
  */
 export const describeConfig = (config) => ({
   production: config.production,
-  storage: { mode: config.storage.mode, url: config.storage.url ?? null, namespace: config.storage.namespace, applicationId: config.storage.applicationId ?? null, environment: config.storage.environment ?? null, durable: config.storage.durable, source: config.storage.source },
+  storage: { mode: config.storage.mode, url: config.storage.url ?? null, namespace: config.storage.namespace, applicationId: config.storage.applicationId ?? null, environment: config.storage.environment ?? null, durable: config.storage.durable, embedded: Boolean(config.storage.embedded), path: config.storage.embedded ? config.storage.path : null, source: config.storage.source },
   operatorBoundary: config.operatorToken ? 'configured' : 'absent',
   limits: { maxBodyBytes: config.maxBodyBytes, requestTimeoutMs: config.requestTimeoutMs },
 });
+
+/**
+ * Refuses an embedded store whose directory is not on a mounted volume.
+ *
+ * `mountinfo` is the text of `/proc/self/mountinfo`. The longest mount point that contains `path` must not be `/`: the
+ * container's root filesystem is rebuilt on every deploy, so a path that resolves to it would accept events and lose
+ * them. This is the embedded equivalent of refusing `local` in production.
+ */
+export function assertPersistentMount(path, mountinfo) {
+  const mounts = String(mountinfo)
+    .split('\n')
+    .map((line) => line.split(' ')[4])
+    .filter(Boolean)
+    .map((mount) => mount.replace(/\\040/g, ' '));
+  const holder = mounts
+    .filter((mount) => path === mount || path.startsWith(mount.endsWith('/') ? mount : `${mount}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  if (!holder || holder === '/') {
+    throw new ConfigurationError('the embedded store is not on a persistent volume', {
+      problems: [`FELTDB_PATH ${path} is on the container root filesystem, which does not outlive a deploy. Mount a volume and put FELTDB_PATH under it.`],
+    });
+  }
+  return holder;
+}

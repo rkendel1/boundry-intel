@@ -13,11 +13,15 @@
  * Readiness is re-checked on every `/ready` request rather than cached, so a process whose authority goes away stops
  * reporting itself ready without needing to be restarted.
  */
+import { readFileSync } from 'node:fs';
+
 import { createFeltDB } from '@feltdb/core';
+
+import { prepare } from './application.mjs';
 
 import { EventAcceptor } from './acceptance.mjs';
 import { PublisherDirectory } from './publishers.mjs';
-import { describeConfig, resolveRuntimeConfig, ConfigurationError } from './config.mjs';
+import { assertPersistentMount, describeConfig, resolveRuntimeConfig, ConfigurationError } from './config.mjs';
 import { startIntelServer } from './server.mjs';
 
 /**
@@ -53,7 +57,31 @@ export async function main() {
     throw error;
   }
 
-  const db = createFeltDB();
+  let db;
+  try {
+    if (config.storage.embedded) {
+      // Embedded FeltDB: the volume check comes before the database is opened, so nothing is ever written to a path
+      // that would not survive. The contract is installed in-process (`prepare`), which is how a local store is governed.
+      let mountinfo;
+      try {
+        mountinfo = readFileSync('/proc/self/mountinfo', 'utf8');
+      } catch (error) {
+        throw new ConfigurationError('cannot verify the embedded store is on a persistent volume', { problems: [`/proc/self/mountinfo is unreadable (${error.code}); embedded storage is only supported on Linux with a mounted volume.`] });
+      }
+      assertPersistentMount(config.storage.path, mountinfo);
+      db = createFeltDB({ mode: 'local', namespace: config.storage.namespace, path: config.storage.path, access: 'shared' });
+      await prepare(db);
+    } else {
+      db = createFeltDB();
+    }
+  } catch (error) {
+    if (error instanceof ConfigurationError) {
+      log({ event: 'configuration.invalid', problems: error.problems, at: new Date().toISOString() });
+      process.exitCode = 78;
+      return null;
+    }
+    throw error;
+  }
   const publishers = new PublisherDirectory(db);
   const events = new EventAcceptor(db, publishers);
   const readiness = storageReadiness(events);

@@ -16,7 +16,7 @@ here was checked against the live systems on 2026-11-10; where something was not
 
 | | |
 |---|---|
-| **Storage** | FeltDB `remote` mode against the managed authority at `https://api.feltdb.com` (Fly), application `app_uhW4QQFJ4NRlcGLvnu`, namespace `tenant_bpWofSKiLMZyryxeUJ:great`, environment `production` |
+| **Storage** | FeltDB `remote` mode against the managed authority at `https://api.feltdb.com` (Fly), application `app_zQ6Ckl8wHg7F9oWbZ9`, namespace `tenant_bpWofSKiLMZyryxeUJ:intel-registry`, environment `production` |
 | **Contract** | published and promoted to that application, not evolved by the process |
 | **Runtime** | a single Node ≥ 20 process, `node src/main.mjs`, no build step, three dependencies |
 | **Authentication inward** | publisher keys (`bik_…`) on `POST /v1/events`; a separate operator token on the publisher routes |
@@ -44,8 +44,8 @@ misconfiguration away from a public bundle. FeltDB's own guidance is the same: a
 |---|---|---|
 | `FELTDB_URL` | yes in production | the managed authority, `https://api.feltdb.com` |
 | `FELTDB_TOKEN` | yes in production | data-plane service key, `fdb_live_…`. Needs the `state:read`, `state:write` and `application:revision:read` scopes |
-| `FELTDB_APPLICATION_ID` | yes | `app_uhW4QQFJ4NRlcGLvnu` |
-| `FELTDB_NAMESPACE` | yes | `tenant_bpWofSKiLMZyryxeUJ:great` |
+| `FELTDB_APPLICATION_ID` | yes | `app_zQ6Ckl8wHg7F9oWbZ9` |
+| `FELTDB_NAMESPACE` | yes | `tenant_bpWofSKiLMZyryxeUJ:intel-registry` |
 | `FELTDB_ENVIRONMENT` | yes | `production` |
 | `BOUNDRY_INTEL_ENV` | no | `production` turns on fail-closed checking; otherwise `NODE_ENV` is used |
 | `BOUNDRY_INTEL_OPERATOR_TOKEN` | yes in production | at least 32 characters. Without it the publisher routes are **not mounted** |
@@ -114,7 +114,7 @@ publisher key hashes must never be reachable from a browser session, so there is
 grant.
 
 **Status.** Version 1 is published and promoted:
-`apprev://tenant_bpWofSKiLMZyryxeUJ/app_uhW4QQFJ4NRlcGLvnu/sha256:c8371c6c7d0bc4ce93f8990f471b2b23a3e97cc68deb45b2a99a9b343be15000`.
+`apprev://tenant_bpWofSKiLMZyryxeUJ/app_zQ6Ckl8wHg7F9oWbZ9/sha256:e12deaf8ba5a1c883d0674114b1d95180cb068b8a419e77339edcad90c758c99`.
 
 ## 7. Deploying, and rolling back
 
@@ -186,7 +186,7 @@ Verified locally, on a real FeltDB with the contract enforced:
 The contract is live. The one thing between this and a durable remote write is a data-plane key with the right scopes.
 The authority's own words:
 
-> The credential was accepted but is not authorized for application "app_uhW4QQFJ4NRlcGLvnu" in environment
+> The credential was accepted but is not authorized for application "app_zQ6Ckl8wHg7F9oWbZ9" in environment
 > "production". Use a data key minted for this application with the application:revision:read and state:read scopes.
 
 The key in `FELTDB_TOKEN` was minted with `minimal` scopes. Minting a replacement is one command, which signs in with
@@ -199,3 +199,38 @@ FELTDB_MANAGED_EMAIL=<account> FELTDB_MANAGED_PASSWORD=<password> node node_modu
 Afterwards, `GET /ready` should answer 200 and the durable round-trip can be proven end to end.
 
 Separately, deploying to a hosting platform needs that platform's credentials, which are not in this environment.
+
+## 10. Where it runs now: Hetzner, embedded FeltDB (2026-11-10)
+
+**This section supersedes §2, §3, §6, §7 and §9**, which describe the managed-authority design that was abandoned.
+
+The service runs as the Docker container `boundry-intel` on the Hetzner host, at `https://intel.trythissoftware.com`,
+behind Caddy, bound to `127.0.0.1:21010`. Storage is an **embedded FeltDB** (`FELTDB_MODE=local`,
+`FELTDB_PATH=/data/intel`) on the Docker volume `boundry_intel_data`. The managed authority is not used and the Fly app
+is gone.
+
+**Why embedded.** The managed authority refused the runtime key's collection reads (HTTP 403) although the key was valid
+and its scopes correct; `/v1/application` answered 200 with it. The cause was not isolated. The contract's policies have
+empty `capabilities`, and the authority says it "refuses every read and write a policy does not allow", so policy is
+the leading suspect. The §6 claim that empty policies leave the service key unaffected was never verified.
+
+**The fail-closed rule is kept.** A production `local` store is refused unless `BOUNDRY_INTEL_STORAGE=embedded` is set,
+`FELTDB_PATH` is absolute, **and the path is on a mounted volume** (checked against `/proc/self/mountinfo`). A path on
+the container root filesystem exits 78 before a port is bound.
+
+**Host layout.** Env file `/opt/boundry-intel/env` (mode 600, holds the operator token). Build context
+`/opt/boundry-intel/src-build`. Caddy site in `/etc/caddy/Caddyfile`.
+
+```bash
+# redeploy from this repo
+tar czf - package.json package-lock.json Dockerfile .dockerignore src schema | ssh root@<host> 'rm -rf /opt/boundry-intel/src-build && mkdir -p /opt/boundry-intel/src-build && tar xzf - -C /opt/boundry-intel/src-build'
+ssh root@<host> 'cd /opt/boundry-intel/src-build && docker build -q -t boundry-intel:local . && docker rm -f boundry-intel; docker run -d --name boundry-intel --restart unless-stopped --env-file /opt/boundry-intel/env -v boundry_intel_data:/data -p 127.0.0.1:21010:8080 boundry-intel:local'
+```
+
+**Limits.** One host, one volume, no backups configured: snapshot `boundry_intel_data` if the data matters. The container
+runs as root (volume ownership).
+
+**Verified on the live URL:** health and readiness (embedded, durable); `accepted`, `duplicate`, `409 conflict`, unauthorized
+and other-product `403`, invalid `400`, with nothing stored for refusals; the event surviving a container restart and
+the replay answering `duplicate`; no key or token in the log. **Not re-run on the host:** the storage-failure case
+(covered by a unit test).
