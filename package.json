@@ -15,10 +15,14 @@
     "./publishers": "./src/publishers.mjs",
     "./acceptance": "./src/acceptance.mjs",
     "./events": "./src/events.mjs",
-    "./appport-feedback": "./src/appport-feedback.mjs"
+    "./appport-feedback": "./src/appport-feedback.mjs",
+    "./server": "./src/server.mjs",
+    "./config": "./src/config.mjs"
   },
   "scripts": {
-    "test": "node --test --test-concurrency=1 test/*.test.mjs"
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
+    "start": "node src/main.mjs",
+    "contract": "node scripts/contract.mjs"
   },
   "dependencies": {
     "@appport/protocol": "1.5.0",
