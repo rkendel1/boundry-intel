@@ -1,0 +1,124 @@
+/**
+ * What the service needs before it will start, and why it refuses to start without it.
+ *
+ * **The hazard this exists to close.** `@feltdb/core` resolves an absent configuration to `local` mode and a path
+ * under the working directory: `resolveFeltDBDeployment({}, …)` answers
+ * `{ mode: 'local', namespace: 'default', path: '<cwd>/.feltdb/default', source: 'auto' }`. A service deployed with a
+ * missing or misspelled variable would therefore come up happily, accept events, answer `accepted`, and write them to
+ * a container filesystem that disappears on the next deploy. Every publisher would have been told its event was
+ * durable. So in production this module refuses `local` and `memory` outright: a service that cannot prove durable
+ * storage must not start, rather than start and lie.
+ *
+ * **What production means here.** `BOUNDRY_INTEL_ENV=production`, or `NODE_ENV=production` when the former is unset.
+ * Anything else is a development configuration, where `local` is allowed and is the normal way to run the tests.
+ *
+ * Nothing here contacts the network: resolving the configuration is pure over the environment, so a misconfiguration
+ * is found before a socket is opened and can be reported as a configuration error rather than an outage.
+ */
+import { resolveFeltDBDeployment } from '@feltdb/core';
+
+/** Modes that keep data only for as long as the process or its container lives. */
+export const EPHEMERAL_MODES = Object.freeze(['local', 'memory', 'browser']);
+
+/** The one FeltDB mode that is a managed authority: state outlives this process. */
+export const DURABLE_MODE = 'remote';
+
+export class ConfigurationError extends Error {
+  constructor(message, { problems = [] } = {}) {
+    super(message);
+    this.name = 'ConfigurationError';
+    this.code = 'CONFIGURATION_INVALID';
+    this.problems = Object.freeze([...problems]);
+  }
+}
+
+const trimmed = (value) => (typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined);
+
+/**
+ * The service's configuration, from the environment alone.
+ *
+ * @param {Record<string, string | undefined>} env
+ * @returns {{
+ *   production: boolean,
+ *   storage: { mode: string, url?: string, namespace: string, applicationId?: string, environment?: string, path?: string, durable: boolean, source: string },
+ *   port: number,
+ *   operatorToken: string | null,
+ *   maxBodyBytes: number,
+ *   requestTimeoutMs: number,
+ * }}
+ */
+export function resolveRuntimeConfig(env = process.env) {
+  const production = (trimmed(env.BOUNDRY_INTEL_ENV) ?? trimmed(env.NODE_ENV)) === 'production';
+  const problems = [];
+
+  let resolution;
+  try {
+    resolution = resolveFeltDBDeployment(undefined, { env, isNode: true, isBrowser: false, configFile: null });
+  } catch (error) {
+    // A half-given remote configuration (a mode with no url, for one) throws here. In production that is fatal; in
+    // development it would silently become `local`, which is exactly the confusion this module refuses to allow.
+    throw new ConfigurationError(`FeltDB configuration is invalid: ${error.message}`, { problems: [String(error.message)] });
+  }
+
+  const durable = resolution.mode === DURABLE_MODE;
+  if (production && !durable) {
+    problems.push(
+      `FeltDB mode is "${resolution.mode}" (resolved from ${resolution.source}), which does not outlive this process. ` +
+        `Production requires mode "${DURABLE_MODE}": set FELTDB_URL and FELTDB_TOKEN (and FELTDB_APPLICATION_ID, FELTDB_NAMESPACE, FELTDB_ENVIRONMENT for a managed authority).`,
+    );
+  }
+  if (production && durable && !trimmed(resolution.token)) {
+    problems.push('FELTDB_TOKEN is required in production: a managed authority refuses every data call without a service key.');
+  }
+
+  const operatorToken = trimmed(env.BOUNDRY_INTEL_OPERATOR_TOKEN) ?? null;
+  // Issuing and revoking publisher keys is an operator act. Without a token the operator routes are not mounted at
+  // all, which is safe anywhere; in production, running the service with no way to revoke a key is not.
+  if (production && !operatorToken) {
+    problems.push('BOUNDRY_INTEL_OPERATOR_TOKEN is required in production: publisher issuance and revocation must have an authenticated operator boundary.');
+  }
+  if (operatorToken && operatorToken.length < 32) {
+    problems.push('BOUNDRY_INTEL_OPERATOR_TOKEN must be at least 32 characters.');
+  }
+
+  // 0 is allowed and means "let the operating system choose", which is how the tests bind without fighting over ports.
+  const port = Number(trimmed(env.PORT) ?? '8080');
+  if (!Number.isInteger(port) || port < 0 || port > 65_535) problems.push(`PORT must be a port number or 0, got ${JSON.stringify(env.PORT)}.`);
+
+  const maxBodyBytes = Number(trimmed(env.BOUNDRY_INTEL_MAX_BODY_BYTES) ?? '1048576');
+  if (!Number.isInteger(maxBodyBytes) || maxBodyBytes < 1024) problems.push('BOUNDRY_INTEL_MAX_BODY_BYTES must be an integer of at least 1024.');
+
+  const requestTimeoutMs = Number(trimmed(env.BOUNDRY_INTEL_REQUEST_TIMEOUT_MS) ?? '30000');
+  if (!Number.isInteger(requestTimeoutMs) || requestTimeoutMs < 1000) problems.push('BOUNDRY_INTEL_REQUEST_TIMEOUT_MS must be an integer of at least 1000.');
+
+  if (problems.length) throw new ConfigurationError(`the service cannot start: ${problems.length} configuration problem(s)`, { problems });
+
+  return Object.freeze({
+    production,
+    storage: Object.freeze({
+      mode: resolution.mode,
+      url: resolution.url,
+      namespace: resolution.namespace,
+      applicationId: resolution.applicationId,
+      environment: resolution.environment,
+      path: resolution.path,
+      durable,
+      source: resolution.source,
+    }),
+    port,
+    operatorToken,
+    maxBodyBytes,
+    requestTimeoutMs,
+  });
+}
+
+/**
+ * The configuration as it is safe to log or serve: the storage identity without the token, and whether an operator
+ * boundary exists without saying what authenticates it.
+ */
+export const describeConfig = (config) => ({
+  production: config.production,
+  storage: { mode: config.storage.mode, url: config.storage.url ?? null, namespace: config.storage.namespace, applicationId: config.storage.applicationId ?? null, environment: config.storage.environment ?? null, durable: config.storage.durable, source: config.storage.source },
+  operatorBoundary: config.operatorToken ? 'configured' : 'absent',
+  limits: { maxBodyBytes: config.maxBodyBytes, requestTimeoutMs: config.requestTimeoutMs },
+});

@@ -1,0 +1,479 @@
+{
+  "collections": [
+    {
+      "name": "intel_events",
+      "fields": [
+        {
+          "name": "correlationId",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "digest",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "event",
+          "type": "json",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "eventId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "occurredAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "productId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "productVersion",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "publisherId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "receivedAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "reference",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "schema",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "type",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "intel_publishers",
+      "fields": [
+        {
+          "name": "createdAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "createdBy",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "lastUsedAt",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "productId",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "publisherId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "revokedAt",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "scopes",
+          "type": "json",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "secretHash",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "subjectKind",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "name": "registry_records",
+      "fields": [
+        {
+          "name": "assertedBy",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "digest",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "document",
+          "type": "json",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "fromId",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "fromKey",
+          "type": "reference",
+          "required": false,
+          "nullable": true,
+          "reference": "registry_records"
+        },
+        {
+          "name": "kind",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "observedAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "productId",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "provenanceKind",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "recordedAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "registryId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "relationshipType",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "schema",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "sourceSystem",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "toId",
+          "type": "string",
+          "required": false,
+          "nullable": true
+        },
+        {
+          "name": "toKey",
+          "type": "reference",
+          "required": false,
+          "nullable": true,
+          "reference": "registry_records"
+        }
+      ]
+    },
+    {
+      "name": "registry_revisions",
+      "fields": [
+        {
+          "name": "digest",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "document",
+          "type": "json",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "recordedAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "registryId",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "revision",
+          "type": "integer",
+          "required": true,
+          "nullable": false
+        },
+        {
+          "name": "supersededAt",
+          "type": "string",
+          "required": true,
+          "nullable": false
+        }
+      ]
+    }
+  ],
+  "indexes": [
+    {
+      "name": "events_by_correlation",
+      "collection": "intel_events",
+      "fields": [
+        "correlationId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "events_by_product",
+      "collection": "intel_events",
+      "fields": [
+        "productId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "events_by_reference",
+      "collection": "intel_events",
+      "fields": [
+        "reference"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "events_by_type",
+      "collection": "intel_events",
+      "fields": [
+        "type"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "intel_events_reference_unique",
+      "collection": "intel_events",
+      "fields": [
+        "reference"
+      ],
+      "unique": true,
+      "sparse": false
+    },
+    {
+      "name": "intel_publishers_publisherId_unique",
+      "collection": "intel_publishers",
+      "fields": [
+        "publisherId"
+      ],
+      "unique": true,
+      "sparse": false
+    },
+    {
+      "name": "publishers_by_product",
+      "collection": "intel_publishers",
+      "fields": [
+        "productId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "publishers_by_publisher_id",
+      "collection": "intel_publishers",
+      "fields": [
+        "publisherId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "publishers_by_subject",
+      "collection": "intel_publishers",
+      "fields": [
+        "subject"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_from",
+      "collection": "registry_records",
+      "fields": [
+        "fromId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_kind",
+      "collection": "registry_records",
+      "fields": [
+        "kind"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_product",
+      "collection": "registry_records",
+      "fields": [
+        "productId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_registry_id",
+      "collection": "registry_records",
+      "fields": [
+        "registryId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_relationship_type",
+      "collection": "registry_records",
+      "fields": [
+        "relationshipType"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "records_by_to",
+      "collection": "registry_records",
+      "fields": [
+        "toId"
+      ],
+      "unique": false,
+      "sparse": false
+    },
+    {
+      "name": "registry_records_registryId_unique",
+      "collection": "registry_records",
+      "fields": [
+        "registryId"
+      ],
+      "unique": true,
+      "sparse": false
+    },
+    {
+      "name": "revisions_by_registry_id",
+      "collection": "registry_revisions",
+      "fields": [
+        "registryId"
+      ],
+      "unique": false,
+      "sparse": false
+    }
+  ],
+  "policies": [
+    {
+      "name": "registry_records-service-only",
+      "resource": "registry_records",
+      "capabilities": []
+    },
+    {
+      "name": "registry_revisions-service-only",
+      "resource": "registry_revisions",
+      "capabilities": []
+    },
+    {
+      "name": "intel_publishers-service-only",
+      "resource": "intel_publishers",
+      "capabilities": []
+    },
+    {
+      "name": "intel_events-service-only",
+      "resource": "intel_events",
+      "capabilities": []
+    }
+  ]
+}

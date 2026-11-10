@@ -218,6 +218,28 @@ test or an operator's script needs no network and implies no deployment.
 relationships in both directions, breadth first, event references as leaves) and `snapshot(store)` (every current
 record, sorted, with counts by kind and by provenance kind). All read-only, all deterministic, all carrying provenance.
 
+## Running it as a service
+
+```bash
+npm start            # node src/main.mjs
+```
+
+The HTTP boundary owns no decisions: validation, authority and identity stay in the contracts behind it
+(`src/server.mjs`). `POST /v1/events` takes one envelope or a batch of at most 100 under a publisher key and returns
+the acceptor's own answers. `GET /health` is liveness; `GET /ready` runs a real query against the real collections and
+answers 503 with the reason when storage is unusable. The publisher routes are mounted only when an operator token is
+configured, because issuing and revoking keys is an operator act.
+
+A production process **refuses to start** without durable storage configured. FeltDB resolves an absent configuration
+to a local path under the working directory, so a misspelled variable would otherwise mean a service that answers
+`accepted` and writes to a filesystem that disappears on the next deploy (`src/config.mjs`).
+
+Nothing is queued in the process: a request is committed before the response or reported as not accepted. A storage
+failure answers `503` with `retryable: true` and no digest, and the publisher resends the same batch, which is safe
+because identity is `(product.id, id)`.
+
+Full decision, environment, deployment and rollback: [`docs/deployment.md`](docs/deployment.md).
+
 ## Development
 
 ```bash
@@ -249,6 +271,9 @@ and recovery of every collection after closing and reopening the store.
 - [`docs/integration-contracts.md`](docs/integration-contracts.md) — publisher identity and scopes, how GitHub and a
   product register, the registration lifecycle, the event envelope, the acceptance answers, and the isolation that is
   actually enforced.
+- [`docs/deployment.md`](docs/deployment.md) — the verified runtime and FeltDB decision: `remote` mode against the
+  managed authority, how the contract is published rather than evolved, the required environment, health and
+  readiness semantics, failure behaviour, deploy and rollback steps, and what is and is not verified.
 - [`docs/agent-feedback/`](docs/agent-feedback/README.md) — feedback from the agents that build and operate the
   ecosystem, one session per file, as `boundry.event/1` envelopes that a test replays through the real acceptor. An
   interim representation until there is an acceptor to reach, never a second feedback store.
