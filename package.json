@@ -2,7 +2,7 @@
   "name": "@boundry/intel-registry",
   "version": "0.1.0",
   "private": true,
-  "description": "Boundry Intel: product, product version, repository, capability and integration identities with provenance, authenticated publisher identities, and durable acceptance of boundry.event/1 envelopes, stored on FeltDB.",
+  "description": "Boundry Intel: product, product version, repository, capability and integration identities with provenance, authenticated publisher identities, and durable acceptance of boundry.event/1 envelopes, stored on FeltDB, with a read-only AppPort/MCP inspection surface.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -17,18 +17,26 @@
     "./events": "./src/events.mjs",
     "./appport-feedback": "./src/appport-feedback.mjs",
     "./server": "./src/server.mjs",
-    "./config": "./src/config.mjs"
+    "./config": "./src/config.mjs",
+    "./inspection": "./src/inspection.mjs",
+    "./capabilities": "./src/capabilities.mjs"
   },
   "scripts": {
     "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "start": "node src/main.mjs",
-    "contract": "node scripts/contract.mjs"
+    "contract": "node scripts/contract.mjs",
+    "intel": "node scripts/intel.mjs"
   },
   "dependencies": {
+    "@appport/authorization": "1.1.1",
+    "@appport/core": "1.7.1",
+    "@appport/mcp": "1.3.8",
     "@appport/protocol": "1.5.0",
+    "@appport/schema": "1.1.6",
+    "@appport/server": "1.3.2",
     "@feltdb/core": ">=0.21.0 <1.0.0"
   },
-  "devDependencies": {
-    "@appport/schema": "1.1.6"
+  "bin": {
+    "intel": "./scripts/intel.mjs"
   }
 }

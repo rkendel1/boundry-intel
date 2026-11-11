@@ -240,6 +240,17 @@ because identity is `(product.id, id)`.
 
 Full decision, environment, deployment and rollback: [`docs/deployment.md`](docs/deployment.md).
 
+### Reading what it holds
+
+A read-only inspection surface is published as an AppPort application (`src/capabilities.mjs`, over
+`src/inspection.mjs`). Its capabilities are `intel.status`, `intel.datasets.list`, `intel.events.list`,
+`intel.events.get`, `intel.publishers.list`, `intel.registry.list`, `intel.registry.get` and `intel.diagnostics`. Each
+is a typed, bounded `observation` that requires `intel.read`. The same application is served over AppPort HTTP
+(`/.well-known/appport`, `/appport/manifest`, `POST /appport`) and, through `@appport/mcp`, as MCP tools (`POST /mcp`).
+The `intel` CLI (`npm run intel -- status`) is a client of the AppPort endpoint. Reading takes the operator token, or the
+read-only `BOUNDRY_INTEL_READER_TOKEN`, plus a `Boundry-Operator` name. No capability writes, and none accepts a query or
+a collection name. How to connect, read, export and diagnose: [`docs/operator-guide.md`](docs/operator-guide.md).
+
 ## Development
 
 ```bash
@@ -247,7 +258,7 @@ npm ci
 npm test        # node --test on a real local FeltDB (temporary directory, enforced contract); no network
 ```
 
-41 tests, all passing, none skipped. They cover identity and idempotency, conflict on re-assertion, revision with
+85 tests, all passing, none skipped. `test/inspection.test.mjs` covers the read surface: discovery, retrieval with provenance and integrity, filters, paging 450 records with nothing lost or repeated, export, invalid input, credentials and attribution, read-only (every capability leaves the store byte-identical), refusals, storage failure, unready storage, staleness, MCP and the CLI. The rest They cover identity and idempotency, conflict on re-assertion, revision with
 history, provenance preservation, dangling and reflexive relationships, durability across reopen, the FeltDB contract
 refusing a second contract and an undeclared collection, every projection and journey, validator negatives for every
 kind, schema/validator agreement for both contracts, publisher issue/authenticate/revoke and the refusals around
@@ -265,7 +276,7 @@ and recovery of every collection after closing and reopening the store.
 | Dashboards | projections exist; rendering them is a later PR, and a dashboard is never an authority | later |
 | A GitHub sync job | would create `repository` and `released-from` references from GitHub; needs an integration identity, a credential home and a schedule | Q1, Q6 |
 | A product-side event emitter, metrics, rate windows, retention sweeping | each needs a deployment or a schedule; the old implementation's designs stand and are not migrated | Q1 |
-| Reading or interpreting accepted events | acceptance stores; attribution, counting and ranking are a reader's work over the stored bytes | later |
+| Interpreting accepted events | acceptance stores, and the inspection surface reads back exactly what was stored; attribution, counting and ranking are a reader's work over the stored bytes | later |
 | Deletion or retraction of records | revision with history covers correction; retraction semantics (and what happens to relationships) are undecided | later |
 
 - [`docs/integration-contracts.md`](docs/integration-contracts.md) — publisher identity and scopes, how GitHub and a

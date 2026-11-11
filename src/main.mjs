@@ -21,6 +21,9 @@ import { prepare } from './application.mjs';
 
 import { EventAcceptor } from './acceptance.mjs';
 import { PublisherDirectory } from './publishers.mjs';
+import { RegistryStore } from './store.mjs';
+import { IngestionMonitor, IntelInspector } from './inspection.mjs';
+import { createIntelApplication } from './capabilities.mjs';
 import { assertPersistentMount, describeConfig, resolveRuntimeConfig, ConfigurationError } from './config.mjs';
 import { startIntelServer } from './server.mjs';
 
@@ -85,6 +88,25 @@ export async function main() {
   const publishers = new PublisherDirectory(db);
   const events = new EventAcceptor(db, publishers);
   const readiness = storageReadiness(events);
+  const startedAt = new Date().toISOString();
+
+  // The read surface: the same stores, read through one inspector, published as an AppPort application (and, from it,
+  // MCP tools). It holds no state of its own except the in-process ingestion tally, which says so in every answer.
+  const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const monitor = new IngestionMonitor();
+  const inspector = new IntelInspector({
+    db,
+    events,
+    publishers,
+    registry: new RegistryStore(db),
+    monitor,
+    readiness,
+    service: { name: 'boundry-intel', version, startedAt, storage: describeConfig(config).storage },
+  });
+  const application = createIntelApplication(inspector, {
+    version,
+    onRead: (read) => log({ event: 'intel.read', ...read, at: new Date().toISOString() }),
+  });
 
   // Said once at startup, so a deploy's log makes plain which authority this process is bound to, and whether that
   // authority answered. A process that starts unready is not an error: it serves /health, refuses /ready, and takes
@@ -97,12 +119,14 @@ export async function main() {
     publishers,
     events,
     readiness,
+    application,
+    monitor,
     log,
     onShutdown: async () => {
       await db.close?.().catch(() => {});
     },
   });
-  return { ...running, db, config, publishers, events };
+  return { ...running, db, config, publishers, events, inspector, application };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

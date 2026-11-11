@@ -234,3 +234,51 @@ runs as root (volume ownership).
 and other-product `403`, invalid `400`, with nothing stored for refusals; the event surviving a container restart and
 the replay answering `duplicate`; no key or token in the log. **Not re-run on the host:** the storage-failure case
 (covered by a unit test).
+
+## 11. The read surface (2026-11-11)
+
+Until this section, the deployed service could accept data but could not show it: no route listed events, counted
+them, or read the registry, and a refused submission left no trace outside the container log. The service now carries
+a read-only inspection surface. It is described for operators in [`operator-guide.md`](operator-guide.md).
+
+**What was added.** These routes go into the same process, behind the same Caddy site:
+
+| Route | What |
+|---|---|
+| `GET /.well-known/appport`, `GET /appport/manifest`, `POST /appport` | the AppPort binding of the read application (`@appport/server`) |
+| `POST /mcp` | the same application as MCP tools (`@appport/mcp`, stateless Streamable HTTP) |
+
+All four answer 401 unless the request carries the operator token or the new optional `BOUNDRY_INTEL_READER_TOKEN`, and
+400 unless it also names the caller in `Boundry-Operator`. The reader token cannot reach `/v1/publishers`.
+
+**Environment.** `BOUNDRY_INTEL_READER_TOKEN` is optional. When set, it must be at least 32 characters and must differ
+from the operator token, or the process exits 78. Add it to `/opt/boundry-intel/env`.
+
+**Dependencies.** The process no longer has three runtime dependencies. `@appport/core`, `@appport/server`,
+`@appport/authorization`, `@appport/schema` and `@appport/mcp` are pinned exactly and are all on the `@appport/protocol`
+1.5.0 the service already used. `@appport/mcp` brings in the official `@modelcontextprotocol/sdk`, about 95 packages in
+all. None has an install script or native code, and `npm audit --omit=dev` reports none vulnerable. To drop MCP, remove
+the `/mcp` route and that one dependency; nothing else depends on it.
+
+**Redeploy and verify.** Use the §10 commands unchanged; the Dockerfile now also copies `scripts/`. Then, from any
+machine:
+
+```bash
+curl -s https://intel.trythissoftware.com/ready
+```
+
+```bash
+BOUNDRY_INTEL_TOKEN=<reader token> BOUNDRY_INTEL_AS=<you> npm run intel -- status
+```
+
+The second command should show `storage.ready: true`, true counts per collection, and `freshness.state`. The in-memory
+refusal tally starts empty after a deploy.
+
+**Verified** locally, on the real process and against a real FeltDB, including the production embedded configuration
+(`BOUNDRY_INTEL_ENV=production`, `BOUNDRY_INTEL_STORAGE=embedded`, `FELTDB_PATH` on a mounted volume): every
+capability, the CLI, MCP `tools/list` and `tools/call`, export, the 401/400 refusals, a reader refused at the operator
+routes, data surviving a restart, and no token in the log. `npm ci --omit=dev` installs cleanly, and a production
+process with no storage configured still exits 78. **Not verified:** the image build (there was no Docker daemon) and
+anything on the Hetzner host, which was not reachable over SSH from the session that made this change. Until it is
+redeployed, the live service answers 404 on these routes.
+
