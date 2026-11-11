@@ -53,8 +53,19 @@ carries the reason. *Verified live, 2026-11-11:* `{"status":"alive"}` and
 | publisher key `bik_…` | issued by an operator | post events for its own product; cannot read this surface |
 
 Both tokens live only in `/opt/boundry-intel/env` (mode 600) on the host. Give agents and dashboards the **reader**
-token. Every read must also send `Boundry-Operator: <your name>`, and the service logs each read as
-`{"event":"intel.read","capability":…,"principal":<that name>}`. No token or key is ever logged.
+token. No token or key is ever logged.
+
+**What the audit log can prove.** Every read must also send `Boundry-Operator: <name>`, and is logged as:
+
+```json
+{"event":"intel.read","capability":"intel.status","authenticated":"credential:reader","claimedName":"<name>","requestId":"…"}
+```
+
+`authenticated` is verified: it names the credential that was presented. `claimedName` is **not** verified. Anyone
+holding the reader token can send any name. Publisher issue and revoke are logged the same way
+(`"authenticated":"credential:operator","claimedName":…`). The `createdBy` stored on a publisher record is that same
+claimed label. While one reader token is shared, the log can tell reader reads from operator reads, and nothing finer.
+Per-person or per-agent identity needs one credential per holder; it is not built.
 
 To add a reader token (on the host):
 
@@ -172,3 +183,60 @@ docker exec -e BOUNDRY_INTEL_URL=http://127.0.0.1:8080 -e BOUNDRY_INTEL_TOKEN="$
 
 That still goes through the service and its authorization. Stop the container before copying the volume
 (`boundry_intel_data`) for a snapshot.
+
+## 7. Backup and restore
+
+The store holds the only copy of every accepted event and every publisher record. There are no automatic backups.
+Run this on the host, from the deployed source directory:
+
+```bash
+cd /opt/boundry-intel/src-build && sh scripts/backup.sh /var/backups/boundry-intel
+```
+
+It stops the container (FeltDB's files are only consistent at rest), archives `/data/intel` from the volume read-only,
+starts the container again (always, even when archiving fails), waits for `/ready`, and then **proves the archive
+restores**. It extracts the archive into a throwaway container with no network, opens it with the same FeltDB build, and
+reads every record. Every event's envelope must still match its acceptance digest. Next to each archive it writes
+`.sha256` and `.verify.json` (counts, time ranges, the FeltDB version, problems). It keeps the newest 14 *verified*
+archives (`KEEP=`). Expect a few seconds of downtime. Publishers get a 502 during it and must resend, which is safe:
+a resend of a stored event answers `duplicate`.
+
+To check any archive again:
+
+```bash
+docker run --rm --network none -v /var/backups/boundry-intel:/backup:ro boundry-intel:local node scripts/verify-backup.mjs /backup/<archive>.tgz
+```
+
+**Restore never overwrites the live volume.** Restore into a new volume, check it on a loopback port, then switch:
+
+```bash
+docker volume create boundry_intel_restore
+```
+
+```bash
+docker run --rm --network none -v boundry_intel_restore:/data -v /var/backups/boundry-intel:/backup:ro --entrypoint sh boundry-intel:local -c 'mkdir -p /data/intel && tar -xzf /backup/<archive>.tgz -C /data/intel'
+```
+
+```bash
+docker run -d --name boundry-intel-restore --env-file /opt/boundry-intel/env -v boundry_intel_restore:/data -p 127.0.0.1:21011:8080 boundry-intel:local
+```
+
+```bash
+docker exec -e BOUNDRY_INTEL_URL=http://127.0.0.1:8080 -e BOUNDRY_INTEL_TOKEN="$TOKEN" -e BOUNDRY_INTEL_AS=restore-drill boundry-intel-restore node scripts/intel.mjs status
+```
+
+For a **drill**, compare those counts with the `.verify.json`, then remove `boundry-intel-restore` and its volume. For a
+**real restore**, stop and remove `boundry-intel` and run it again with `-v boundry_intel_restore:/data` on
+`127.0.0.1:21010` (deployment §10). Keep the old volume until the restored service has been verified.
+
+**Limits.** A backup on the same disk does not survive losing the host. Copy `/var/backups/boundry-intel` off the host;
+that is not set up. Restore with an image whose `@feltdb/core` is at least the version in `.verify.json`: FeltDB refuses
+a store written in a newer format.
+
+*Verified:* in tests (`test/backup.test.mjs`) on a real FeltDB in the production namespace. A backup restores with
+every record. The restored store authenticates the same publisher key and answers `duplicate` to a resend. A truncated
+archive, an archive with no store, a file altered on disk (FeltDB refuses it) and a record whose envelope no longer
+matches its digest all fail verification. `backup.sh`'s ordering (stop, archive, start, verify) and its restart after
+a failed archive were checked with a stand-in for `docker`. **Not verified:** the Docker commands themselves, on the
+host or anywhere (no Docker daemon was available).
+

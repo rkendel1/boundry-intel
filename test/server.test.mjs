@@ -323,7 +323,7 @@ test('no key, operator token or event content reaches the log', async () => {
       assert.equal(written.includes(secret), false, `the log leaked ${secret.slice(0, 12)}…`);
     }
     // What it does carry: the act, the publisher id, the operator's name.
-    assert.ok(s.logged.some((e) => e.event === 'publisher.issued' && e.publisherId === issued.publisher.publisherId && e.createdBy === 'operator:test'));
+    assert.ok(s.logged.some((e) => e.event === 'publisher.issued' && e.publisherId === issued.publisher.publisherId && e.claimedName === 'operator:test' && e.authenticated === 'credential:operator'));
     assert.ok(s.logged.some((e) => e.event === 'publisher.revoked'));
     assert.ok(s.logged.some((e) => e.event === 'request' && e.path === '/v1/events' && e.status === 200));
   } finally {
