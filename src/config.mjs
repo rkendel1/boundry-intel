@@ -43,6 +43,7 @@ const trimmed = (value) => (typeof value === 'string' && value.trim() !== '' ? v
  *   storage: { mode: string, url?: string, namespace: string, applicationId?: string, environment?: string, path?: string, durable: boolean, source: string },
  *   port: number,
  *   operatorToken: string | null,
+ *   readerToken: string | null,
  *   maxBodyBytes: number,
  *   requestTimeoutMs: number,
  * }}
@@ -89,6 +90,13 @@ export function resolveRuntimeConfig(env = process.env) {
     problems.push('BOUNDRY_INTEL_OPERATOR_TOKEN must be at least 32 characters.');
   }
 
+  // A read-only credential for the inspection surface (AppPort and MCP), so an agent or a dashboard can read what the
+  // service holds without holding the token that issues and revokes publisher keys. Optional: the operator token reads
+  // too. It must not equal the operator token, or "read-only" would be a label rather than a boundary.
+  const readerToken = trimmed(env.BOUNDRY_INTEL_READER_TOKEN) ?? null;
+  if (readerToken && readerToken.length < 32) problems.push('BOUNDRY_INTEL_READER_TOKEN must be at least 32 characters.');
+  if (readerToken && operatorToken && readerToken === operatorToken) problems.push('BOUNDRY_INTEL_READER_TOKEN must differ from BOUNDRY_INTEL_OPERATOR_TOKEN.');
+
   // 0 is allowed and means "let the operating system choose", which is how the tests bind without fighting over ports.
   const port = Number(trimmed(env.PORT) ?? '8080');
   if (!Number.isInteger(port) || port < 0 || port > 65_535) problems.push(`PORT must be a port number or 0, got ${JSON.stringify(env.PORT)}.`);
@@ -116,6 +124,7 @@ export function resolveRuntimeConfig(env = process.env) {
     }),
     port,
     operatorToken,
+    readerToken,
     maxBodyBytes,
     requestTimeoutMs,
   });
@@ -129,6 +138,7 @@ export const describeConfig = (config) => ({
   production: config.production,
   storage: { mode: config.storage.mode, url: config.storage.url ?? null, namespace: config.storage.namespace, applicationId: config.storage.applicationId ?? null, environment: config.storage.environment ?? null, durable: config.storage.durable, embedded: Boolean(config.storage.embedded), path: config.storage.embedded ? config.storage.path : null, source: config.storage.source },
   operatorBoundary: config.operatorToken ? 'configured' : 'absent',
+  readBoundary: config.readerToken ? 'operator and reader tokens' : config.operatorToken ? 'operator token only' : 'absent',
   limits: { maxBodyBytes: config.maxBodyBytes, requestTimeoutMs: config.requestTimeoutMs },
 });
 

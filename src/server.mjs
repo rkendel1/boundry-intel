@@ -28,7 +28,14 @@
  * | POST   | `/v1/publishers`                | operator     |
  * | POST   | `/v1/publishers/:id/revoke`     | operator     |
  * | GET    | `/v1/publishers`                | operator     |
+ * | GET    | `/.well-known/appport`          | reader       |
+ * | GET    | `/appport/manifest`             | reader       |
+ * | POST   | `/appport`                      | reader       |
+ * | POST   | `/mcp`                          | reader       |
  *
+ * "reader" is the operator token or the read-only reader token (`capabilities.mjs`). The last four routes are the
+ * inspection surface: AppPort's own HTTP binding and the MCP projection of the same application, mounted only when an
+ * inspection application is given. They are read-only because every capability in that application is.
  * The operator routes are mounted only when an operator token is configured. `src/publishers.mjs` deliberately leaves
  * operator authentication to its caller; this module is that caller, and it refuses the routes rather than exposing
  * `issue` and `revoke` to anyone who can reach the port.
@@ -36,9 +43,14 @@
 import { createServer as createHttpServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 
+import { AppPortServer, createHttpBinding } from '@appport/server';
+import { createMcpHandler } from '@appport/mcp';
+import { AppPortError } from '@appport/protocol';
+
 import { MAX_BATCH } from './acceptance.mjs';
 import { PUBLISHER_SCOPES, PUBLISHER_SUBJECT_KINDS } from './publishers.mjs';
 import { describeConfig } from './config.mjs';
+import { readerIdentity } from './capabilities.mjs';
 
 /** Compares two tokens without leaking their length difference through timing. */
 function sameToken(presented, expected) {
@@ -99,12 +111,70 @@ async function readJson(request, maxBodyBytes) {
  *   publishers: import('./publishers.mjs').PublisherDirectory,
  *   events: import('./acceptance.mjs').EventAcceptor,
  *   readiness: () => Promise<{ ready: boolean, detail?: string }>,
+ *   application?: import('@appport/core').AppPortApplication,
+ *   monitor?: import('./inspection.mjs').IngestionMonitor,
  *   log?: (entry: object) => void,
  *   now?: () => Date,
  * }} parts
  */
-export function createIntelHandler({ config, publishers, events, readiness, log = defaultLog, now = () => new Date() }) {
+export function createIntelHandler({ config, publishers, events, readiness, application, monitor, log = defaultLog, now = () => new Date() }) {
   const operatorEnabled = Boolean(config.operatorToken);
+  const credentials = { operatorToken: config.operatorToken, readerToken: config.readerToken ?? null, now };
+
+  // The inspection surface. Authentication happens twice on purpose: once here, before anything is read (so an
+  // unauthenticated caller gets nothing, not even the manifest), and once inside AppPort, which authorizes every
+  // capability against the identity it is handed regardless of transport.
+  const identify = (headers) => {
+    const result = readerIdentity(headers, credentials);
+    return result.ok ? result.identity : undefined;
+  };
+  const appport = application
+    ? createHttpBinding({ server: new AppPortServer({ application, authenticate: (request) => identify(request.headers ?? {}) }), statusMode: 'mapped', maxBodyBytes: config.maxBodyBytes })
+    : null;
+  const mcp = application
+    ? createMcpHandler(application, {
+        serverInfo: { name: 'boundry-intel', version: application.manifest().application.version },
+        context: ({ headers }) => {
+          const flat = Object.fromEntries(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), Array.isArray(v) ? v[0] : v]));
+          const identity = identify(flat);
+          if (!identity) throw new AppPortError('UNAUTHORIZED', 'a reader or operator token and a Boundry-Operator name are required');
+          return identity;
+        },
+      })
+    : null;
+  const reader = (request) => {
+    if (!application) throw new RequestError(404, 'NOT_FOUND', 'no such route');
+    const result = readerIdentity(request.headers, credentials);
+    if (!result.ok) throw new RequestError(result.status, result.code, result.message);
+    return result;
+  };
+  const readText = async (request) => {
+    const chunks = [];
+    let size = 0;
+    for await (const chunk of request) {
+      size += chunk.length;
+      if (size > config.maxBodyBytes) {
+        request.pause();
+        throw new RequestError(413, 'REQUEST_TOO_LARGE', `the request body is larger than ${config.maxBodyBytes} bytes`);
+      }
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  };
+  const headerRecord = (request) => Object.fromEntries(Object.entries(request.headers).map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : v]));
+  /** Hands a request to AppPort's own HTTP binding and returns its outcome unchanged. */
+  const viaAppPort = async (request, path) => {
+    reader(request);
+    const body = request.method === 'POST' ? await readText(request) : undefined;
+    const outcome = await appport.route({ method: request.method, path, query: new URL(request.url, 'http://localhost').searchParams, headers: headerRecord(request), body });
+    if (outcome.kind === 'stream') {
+      // No capability here streams; a stream outcome is drained so the response is still well-formed.
+      let text = '';
+      for await (const frame of outcome.frames) text += frame;
+      return { status: outcome.status, raw: { headers: outcome.headers, text } };
+    }
+    return { status: outcome.status, raw: { headers: outcome.headers, text: outcome.kind === 'json' ? `${JSON.stringify(outcome.body)}\n` : outcome.body } };
+  };
 
   /** Authenticates the operator, or throws. Never says which half of the check failed. */
   const operator = (request) => {
@@ -149,14 +219,30 @@ export function createIntelHandler({ config, publishers, events, readiness, log 
       path: /^\/v1\/events$/,
       handle: async (request) => {
         const key = bearer(request);
-        if (!key) throw new RequestError(401, 'PUBLISHER_UNAUTHENTICATED', 'a publisher key is required');
-        const body = await readJson(request, config.maxBodyBytes);
+        if (!key) {
+          monitor?.request('unauthenticated', { code: 'PUBLISHER_UNAUTHENTICATED' });
+          throw new RequestError(401, 'PUBLISHER_UNAUTHENTICATED', 'a publisher key is required');
+        }
+        let body;
+        try {
+          body = await readJson(request, config.maxBodyBytes);
+        } catch (error) {
+          monitor?.request('invalidRequest', { code: error.code });
+          throw error;
+        }
         // One envelope or a batch. Both go through the same acceptor call, so a batch of one is not a special case.
         const envelopes = Array.isArray(body) ? body : Array.isArray(body?.events) ? body.events : [body];
         if (envelopes.length === 0) throw new RequestError(400, 'BATCH_EMPTY', 'send at least one event');
         if (envelopes.length > MAX_BATCH) throw new RequestError(413, 'BATCH_TOO_LARGE', `a batch carries at most ${MAX_BATCH} envelopes`);
 
-        const answers = await events.accept(key, envelopes);
+        let answers;
+        try {
+          answers = await events.accept(key, envelopes);
+        } catch (error) {
+          if (!(error instanceof TypeError)) monitor?.request('unavailable', { code: error?.code ?? error?.name, message: error?.message });
+          throw error;
+        }
+        monitor?.answers(answers);
         // The acceptor answers per envelope and never throws for a refusal, so every answer here is a decision it
         // made. A thrown storage failure is caught further out and becomes 503.
         const single = !Array.isArray(body) && !Array.isArray(body?.events);
@@ -227,6 +313,23 @@ export function createIntelHandler({ config, publishers, events, readiness, log 
         return { status: 200, body: { publishers: await publishers.list(filter), subjectKinds: PUBLISHER_SUBJECT_KINDS, scopes: PUBLISHER_SCOPES } };
       },
     },
+
+    // ── Inspection (read-only): AppPort discovery, manifest and requests; MCP over the same application ─────────
+    { method: 'GET', path: /^\/\.well-known\/appport$/, handle: (request, _params, path) => viaAppPort(request, path) },
+    { method: 'GET', path: /^\/appport\/manifest$/, handle: (request, _params, path) => viaAppPort(request, path) },
+    { method: 'POST', path: /^\/appport$/, handle: (request, _params, path) => viaAppPort(request, path) },
+    {
+      method: 'POST',
+      path: /^\/mcp$/,
+      handle: async (request) => {
+        reader(request);
+        const body = await readText(request);
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(headerRecord(request))) if (value !== undefined) headers.set(name, value);
+        const answer = await mcp(new Request(new URL(request.url, 'http://localhost'), { method: 'POST', headers, body }));
+        return { status: answer.status, raw: { headers: Object.fromEntries(answer.headers.entries()), text: await answer.text() } };
+      },
+    },
   ];
 
   return async function handler(request, response) {
@@ -240,13 +343,15 @@ export function createIntelHandler({ config, publishers, events, readiness, log 
         throw new RequestError(pathExists ? 405 : 404, pathExists ? 'METHOD_NOT_ALLOWED' : 'NOT_FOUND', pathExists ? `${request.method} is not allowed here` : 'no such route');
       }
       const params = route.path.exec(path).slice(1);
-      outcome = await route.handle(request, params);
+      outcome = await route.handle(request, params, path);
     } catch (error) {
       outcome = failure(error, log, now);
     }
-    const payload = Buffer.from(`${JSON.stringify(outcome.body)}\n`, 'utf8');
+    const payload = Buffer.from(outcome.raw ? outcome.raw.text : `${JSON.stringify(outcome.body)}\n`, 'utf8');
     const abandoned = !request.readableEnded;
-    response.writeHead(outcome.status, { 'content-type': 'application/json; charset=utf-8', 'content-length': String(payload.length), 'cache-control': 'no-store', ...(abandoned ? { connection: 'close' } : {}) });
+    // A delegated outcome (AppPort, MCP) keeps its own content type; length, caching and connection are always ours.
+    const passed = outcome.raw ? Object.fromEntries(Object.entries(outcome.raw.headers).filter(([k]) => !['content-length', 'connection', 'transfer-encoding', 'cache-control'].includes(k.toLowerCase()))) : {};
+    response.writeHead(outcome.status, { 'content-type': 'application/json; charset=utf-8', ...passed, 'content-length': String(payload.length), 'cache-control': 'no-store', ...(abandoned ? { connection: 'close' } : {}) });
     response.end(payload, () => {
       // A request whose body was refused part-way is not drained: the rest is dropped with the socket, after the
       // publisher has its answer.
