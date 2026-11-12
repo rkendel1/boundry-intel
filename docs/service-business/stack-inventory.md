@@ -45,7 +45,7 @@ These are the product. Everything else is reuse.
 | **AppBoundry** | Product orchestration and lifecycle (intake → quote → order → delivery) | Artifact host/runtime plus capability catalog, resolution, entitlements, composition, materialization, execution ledger and provider lifecycle (`packages/appboundry-runtime/src/*`, tests pr71–pr88). Payment capabilities are catalog schemas only. "Order-to-cash" exists only as a mock-provider test (`packages/cli/test/pr83-business-workflow.test.ts`). | **Wrong layer; useful below** | It sits **under** products, not above them. Closest existing match for spec §11/§16 (capability registry, composition, plan resolution). Candidate home for `PlanCompiler` and the capability catalog, once verified in depth (most runtime packages are private 0.1.0). |
 | **PAX** | Durable execution and coordination, transitions, recovery | Stateless Rust CLI that observes projects (JS, Python, Rust, Docker) and delegates build/test/run to native tools. "PAX does not hold state" and deliberately excludes retries, repair and goal evaluation (`docs/PAX_BOUNDARY.md`, numbered item 4 and "Deliberately outside PAX"). | **Contradicted** | Not part of the order runtime. It could at most supply *evidence* for software-delivery outcomes. Answers §26 Q2: PAX is **neither** the execution source of truth nor a work-representation layer. |
 | **Intent** | Customer goal, service request, approval, change of scope | FeltDB `IntentService`: an app-development planner. `Intent{raw_request, action: implement\|extend\|transition, target: module\|billing\|state, ambiguities, plan, proposal_id}` stored in `_feltdb.Intent` (`@feltdb/core` `dist/intent.d.ts:5-33`). Deployed as a stateless `boundry-intent` container (`appboundry/deploy/boundry`). Not a product (`boundry/content/products.json`). | **Name collision; wrong role** | Do not reuse. A customer outcome request needs its own entity (suggested: `OutcomeRequest`) to avoid two meanings of "Intent" in one ecosystem. The `ambiguities` / `requires_selection` pattern is worth copying for intake. |
-| **FeltKit** | Shared types, codecs, event envelopes, client tooling | A full application platform (`@feltdb/feltkit` 0.3.27): server, client, React, CLI, dashboard; tenants and sessions; `FeltDbIdempotencyStore`; transactional outbox `ctx.afterCommit`; **person-only approvals bound to the sha256 digest of the exact operation and input, with expiry and re-checked authority at execution** (`runtime/approval-rules.ts:1-25`, *code+test*); agent action lifecycle with compare-and-swap transitions and reconcile on restart (`runtime/agent.ts`); recurring schedules. ~100 test files. No workflow or saga engine. No persisted event envelope (events are ephemeral). | **Wrong role; best host** | The service business itself should be **a FeltKit application**: it already provides tenancy, idempotency, outbox, human checkpoints and scheduled recurrence on FeltDB. |
+| **FeltKit** | Shared types, codecs, event envelopes, client tooling | A full application platform (`@feltdb/feltkit` 0.3.27): server, client, React, CLI, dashboard; tenants and sessions; `FeltDbIdempotencyStore`; transactional outbox `ctx.afterCommit`; **person-only approvals bound to the sha256 digest of the exact operation and input, with expiry and re-checked authority at execution** (`runtime/approval-rules.ts:1-25`, *code+test*); agent action lifecycle with compare-and-swap transitions and reconcile on restart (`runtime/agent.ts`); recurring schedules. ~100 test files. Opens **one FeltDB instance per environment** (`runtime/instance.ts`). In-store tenant isolation through `{ tenant: true }` collections, enforced on every read and write (`runtime/tenant-scope.ts`, *code+test* `test/tenancy.test.ts:54`). No workflow or saga engine. No persisted event envelope (events are ephemeral). | **Wrong role; best host** | The service business itself should be **a FeltKit application**: it already provides tenancy, idempotency, outbox, human checkpoints and scheduled recurrence on FeltDB. |
 
 Also relevant, not in the spec's map:
 
@@ -83,9 +83,10 @@ retention and residency obligations; which FeltDB authority hosts production.
    recorded on the order-side grant record and approval is enforced by FeltKit approvals.
 4. **§13 evidence.** "Immutable" means append-only by convention (`requireAbsent` writes plus digests). Nothing in
    the stack is tamper-evident. Either accept that or make hash-chaining an explicit Phase 2 item.
-5. **§15 tenancy.** Spec acceptance test 13 (tenant isolation) can only be met today with a FeltDB namespace per
-   tenant, or with tenant checks in application code plus AuthBoundry `TenantCurrent`. Row-level isolation in FeltDB
-   is not implemented.
+5. **§15 tenancy.** FeltDB itself has no row-level isolation. Spec acceptance test 13 (tenant isolation) can be met
+   in two tested ways: a FeltDB namespace per tenant, which under FeltKit means one deployment per tenant because
+   FeltKit opens one instance per environment, or FeltKit's tenant-scoped collections inside one store. *(Corrected
+   2026-11-12: the first version of this item missed FeltKit's tested in-store isolation.)*
 6. **§20 events.** `OrderAccepted` is listed twice with two meanings (the order accepted for fulfillment, and the
    customer accepting the delivery). Rename one, e.g. `OrderAcceptedForFulfillment` and `DeliveryAccepted`.
 7. **§16 cost.** AppPort capabilities carry no cost or usage dimensions. Quoting needs a declared cost model, either
@@ -106,3 +107,8 @@ retention and residency obligations; which FeltDB authority hosts production.
 Freeze the first service contract and its acceptance tests before any fulfillment code. That requires choosing the
 first outcome and its one read-only connector (an owner decision). The product should live in its own repository as
 a FeltKit application, not inside boundry-intel, whose scope is the ecosystem registry and event acceptance.
+
+**Decided (2026-11-12):**
+- First outcome: supplier invoice reconciliation.
+- Connector: one read-only accounting/ERP connector, limited to invoice and purchase-order reads.
+- Repository: `rkendel1/get-it`. Its `docs/spec.md` (revision 2) applies this inventory.
