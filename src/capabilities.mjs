@@ -9,7 +9,13 @@
  *
  * **Identity is the service's existing bearer credentials**, not a new identity system: the operator token (which already
  * guards publisher issuance) and an optional reader token that can do nothing *but* read. Both are checked with the
- * same constant-time comparison, and both require the `Boundry-Operator` header so every read is attributable.
+ * same constant-time comparison.
+ *
+ * **What is verified and what is claimed are kept apart.** The token proves which *credential* was used (`operator` or
+ * `reader`); it does not prove which person or agent holds it, because a token can be shared. The `Boundry-Operator`
+ * header is required, but it is a label the caller chooses. So the AppPort principal is the credential
+ * (`credential:reader`), the label travels as `attributes.claimedName`, and the audit line records both under those
+ * names. Per-holder verified identity needs one credential per holder; until then the log says what it actually knows.
  */
 import { timingSafeEqual } from 'node:crypto';
 
@@ -90,7 +96,8 @@ export function intelCapabilities(inspector, { onRead = () => {} } = {}) {
       timeoutMs: TIMEOUT_MS,
       handler: async (args, context) => {
         const result = await run(() => handler(args ?? {}));
-        onRead({ capability: name, principal: context.principal?.id ?? null, requestId: context.requestId });
+        // `authenticated` is what the token proved; `claimedName` is what the caller said. Never merged.
+        onRead({ capability: name, authenticated: context.principal?.id ?? null, claimedName: context.principal?.attributes?.claimedName ?? null, requestId: context.requestId });
         return result;
       },
     });
@@ -210,10 +217,12 @@ export function readerIdentity(headers, { operatorToken, readerToken, now = () =
   if (!role) return { ok: false, status: 401, code: 'UNAUTHENTICATED', message: 'a reader or operator token is required' };
   const who = typeof headers['boundry-operator'] === 'string' ? headers['boundry-operator'].trim() : '';
   if (!who || !NAME.test(who)) return { ok: false, status: 400, code: 'OPERATOR_UNNAMED', message: 'the Boundry-Operator header must name the caller (one line, at most 200 characters), so every read is attributable' };
-  const principal = { id: who, type: 'service', attributes: { credential: role } };
+  // The principal is the credential, the only thing verified here. The caller's name is an attribute, marked claimed.
+  const principal = { id: `credential:${role}`, type: 'service', displayName: who, attributes: { credential: role, claimedName: who, nameVerified: false } };
   return {
     ok: true,
     role,
+    claimedName: who,
     identity: { principal, session: { id: `intel:${role}:${who}`, principal, applicationId: APPLICATION_ID, createdAt: now().toISOString(), permissions: [READ_PERMISSION] } },
   };
 }

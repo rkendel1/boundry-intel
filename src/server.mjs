@@ -282,7 +282,8 @@ export function createIntelHandler({ config, publishers, events, readiness, appl
         } catch (error) {
           throw new RequestError(400, 'PUBLISHER_INVALID', error.message);
         }
-        log({ event: 'publisher.issued', publisherId: issued.publisher.publisherId, subject: issued.publisher.subject, scopes: issued.publisher.scopes, createdBy, at: now().toISOString() });
+        // `createdBy` is the Boundry-Operator label: claimed, not verified. What was verified is the operator token.
+        log({ event: 'publisher.issued', publisherId: issued.publisher.publisherId, subject: issued.publisher.subject, scopes: issued.publisher.scopes, authenticated: 'credential:operator', claimedName: createdBy, at: now().toISOString() });
         // The key crosses the wire exactly once, here, and is never logged: the log line above names the id only.
         return { status: 201, body: { publisher: issued.publisher, key: issued.key } };
       },
@@ -295,7 +296,7 @@ export function createIntelHandler({ config, publishers, events, readiness, appl
         const id = decodeURIComponent(publisherId);
         const revoked = await publishers.revoke(id, { revokedBy });
         if (!revoked) throw new RequestError(404, 'NOT_FOUND', 'no such publisher');
-        log({ event: 'publisher.revoked', publisherId: id, revokedBy, at: now().toISOString() });
+        log({ event: 'publisher.revoked', publisherId: id, authenticated: 'credential:operator', claimedName: revokedBy, at: now().toISOString() });
         return { status: 200, body: { publisherId: id, revoked: true } };
       },
     },

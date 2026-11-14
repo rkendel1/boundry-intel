@@ -368,12 +368,26 @@ test('every capability is a declared observation, and calling all of them change
   }
 });
 
-test('every read is attributed in the log, and no credential reaches the log', async () => {
+test('the audit log keeps the verified credential apart from the name the caller claims', async () => {
   const s = await serve();
   try {
     await s.out('intel.status');
-    const read = s.logged.find((e) => e.event === 'intel.read');
-    assert.deepEqual([read.capability, read.principal], ['intel.status', AS]);
+    await s.call('intel.status', {}, { token: OPERATOR, as: 'someone-else' });
+    const reads = s.logged.filter((e) => e.event === 'intel.read');
+    assert.deepEqual(reads.map((r) => [r.capability, r.authenticated, r.claimedName]), [
+      ['intel.status', 'credential:reader', AS],
+      ['intel.status', 'credential:operator', 'someone-else'],
+    ]);
+    assert.ok(reads.every((r) => !('principal' in r)), 'no field implies the name was verified');
+
+    // Two holders of the same reader token cannot be told apart, and the log does not pretend otherwise.
+    await s.call('intel.status', {}, { token: READER, as: 'admin' });
+    assert.equal(s.logged.filter((e) => e.event === 'intel.read').at(-1).authenticated, 'credential:reader');
+
+    // The operator routes record the same distinction.
+    await s.http('POST', '/v1/publishers', { body: { subject: 'product:feltdb', name: 'p', scopes: ['events:write'] }, token: OPERATOR, as: 'op-label' });
+    const issued = s.logged.find((e) => e.event === 'publisher.issued');
+    assert.deepEqual([issued.authenticated, issued.claimedName], ['credential:operator', 'op-label']);
     const text = JSON.stringify(s.logged);
     assert.ok(!text.includes(READER) && !text.includes(OPERATOR));
   } finally {

@@ -223,7 +223,7 @@ the container root filesystem exits 78 before a port is bound.
 
 ```bash
 # redeploy from this repo
-tar czf - package.json package-lock.json Dockerfile .dockerignore src schema | ssh root@<host> 'rm -rf /opt/boundry-intel/src-build && mkdir -p /opt/boundry-intel/src-build && tar xzf - -C /opt/boundry-intel/src-build'
+tar czf - package.json package-lock.json Dockerfile .dockerignore src schema scripts | ssh root@<host> 'rm -rf /opt/boundry-intel/src-build && mkdir -p /opt/boundry-intel/src-build && tar xzf - -C /opt/boundry-intel/src-build'
 ssh root@<host> 'cd /opt/boundry-intel/src-build && docker build -q -t boundry-intel:local . && docker rm -f boundry-intel; docker run -d --name boundry-intel --restart unless-stopped --env-file /opt/boundry-intel/env -v boundry_intel_data:/data -p 127.0.0.1:21010:8080 boundry-intel:local'
 ```
 
@@ -260,7 +260,7 @@ from the operator token, or the process exits 78. Add it to `/opt/boundry-intel/
 all. None has an install script or native code, and `npm audit --omit=dev` reports none vulnerable. To drop MCP, remove
 the `/mcp` route and that one dependency; nothing else depends on it.
 
-**Redeploy and verify.** Use the §10 commands unchanged; the Dockerfile now also copies `scripts/`. Then, from any
+**Redeploy and verify.** Use the §10 commands. The source tarball now includes `scripts/`, because the Dockerfile copies it: an older copy of the command, without it, fails the build at `COPY scripts`. Then, from any
 machine:
 
 ```bash
@@ -282,3 +282,8 @@ process with no storage configured still exits 78. **Not verified:** the image b
 anything on the Hetzner host, which was not reachable over SSH from the session that made this change. Until it is
 redeployed, the live service answers 404 on these routes.
 
+
+**Backups (2026-11-11).** `scripts/backup.sh` takes a stop-archive-start backup on the host and then proves it restores
+(`scripts/verify-backup.mjs`); restore goes into a new volume, never over the live one (operator guide §7). Deploying
+the read surface and reading production for the first time is written up as a single task with stop conditions and a
+rollback: [`runbooks/deploy-and-verify-read-surface.md`](runbooks/deploy-and-verify-read-surface.md).
